@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export type TestStatus = "draft" | "published";
 export type MaxAttempts = number; // 0 = unlimited, else exact attempt count
+export type TestAccessLevel = "all" | "coachingOnly";
 
 export interface ISubjectSection {
   name: string;
@@ -27,6 +28,7 @@ export interface ITest extends Document {
   status: TestStatus;
   order: number;
   subjectSections: ISubjectSection[];
+  accessLevel: TestAccessLevel;
   createdAt: Date;
 }
 
@@ -57,6 +59,7 @@ const testSchema = new Schema<ITest>({
   status: { type: String, enum: ["draft", "published"], default: "draft" },
   order: { type: Number, default: 0 },
   subjectSections: { type: [subjectSectionSchema], default: [] },
+  accessLevel: { type: String, enum: ["all", "coachingOnly"], default: "coachingOnly" },
   createdAt: { type: Date, default: Date.now },
 });
 

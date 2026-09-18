@@ -36,6 +36,31 @@ export async function notifyAllStudents(
   }
 }
 
+export async function notifyAllAdmins(
+  title: string,
+  message: string,
+  type: NotificationType = "system",
+  extraData: { targetScreen?: string | null } = {}
+): Promise<void> {
+  try {
+    const admins = await User.find({ role: "admin" }, "_id");
+    if (!admins || admins.length === 0) return;
+    await Notification.insertMany(
+      admins.map((a) => ({
+        user: a._id,
+        type,
+        title,
+        message,
+        targetScreen: extraData.targetScreen || null,
+        isRead: false,
+        createdAt: new Date(),
+      }))
+    );
+  } catch (error) {
+    console.error("Failed to notify admins:", error);
+  }
+}
+
 export const getNotifications = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId as string;

@@ -7,6 +7,7 @@ export interface IAnswer {
   selectedOption: number | null;
   markedForReview: boolean;
   isCorrect: boolean | null;
+  timeSpentSeconds: number;
 }
 
 export interface ISubjectBreakdown {
@@ -19,6 +20,7 @@ export interface ISectionBreakdown {
   name: string;
   correct: number;
   total: number;
+  timeSpentSeconds: number;
 }
 
 export interface ITestAttempt extends Document {
@@ -53,6 +55,7 @@ const answerSchema = new Schema<IAnswer>(
     selectedOption: { type: Number, default: null },
     markedForReview: { type: Boolean, default: false },
     isCorrect: { type: Boolean, default: null },
+    timeSpentSeconds: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -71,6 +74,7 @@ const sectionBreakdownSchema = new Schema<ISectionBreakdown>(
     name: { type: String, required: true },
     correct: { type: Number, required: true },
     total: { type: Number, required: true },
+    timeSpentSeconds: { type: Number, default: 0 },
   },
   { _id: false }
 );

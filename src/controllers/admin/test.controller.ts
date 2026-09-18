@@ -20,6 +20,7 @@ const CONFIG_FIELDS = [
   "maxAttempts",
   "startDate",
   "endDate",
+  "accessLevel",
 ] as const;
 
 export const listAllTests = async (req: AuthRequest, res: Response): Promise<void> => {

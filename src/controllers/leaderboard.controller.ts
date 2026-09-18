@@ -23,6 +23,17 @@ export const getLeaderboard = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    if (test.accessLevel === "coachingOnly") {
+      const user = await User.findById(userId);
+      if (!user?.isCoachingStudent) {
+        res.status(403).json({
+          code: "COACHING_ONLY",
+          message: "This leaderboard is only for Coaching Students. Please contact your Coaching Admin for access.",
+        });
+        return;
+      }
+    }
+
     const attempts = await TestAttempt.find({ test: testId, status: "completed" })
       .sort({ score: -1 })
       .populate<{ user: { _id: string; name: string } }>("user", "name");

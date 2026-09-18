@@ -11,8 +11,11 @@ export interface IUser extends Document {
   email: string;
   mobile: string;
   password: string;
+  city: string;
+  state: string;
   preferredLanguage: Language;
   role: Role;
+  isCoachingStudent: boolean;
   createdAt: Date;
 }
 
@@ -21,8 +24,11 @@ const userSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   mobile: { type: String, required: true, trim: true },
   password: { type: String, required: true },
+  city: { type: String, default: "", trim: true },
+  state: { type: String, default: "", trim: true },
   preferredLanguage: { type: String, enum: LANGUAGES, default: "English" },
   role: { type: String, enum: ROLES, default: "student" },
+  isCoachingStudent: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

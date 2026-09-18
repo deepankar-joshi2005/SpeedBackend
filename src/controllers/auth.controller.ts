@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User, { Role, Language } from "../models/user.model";
 import { isValidEmail, isValidMobile, isStrongPassword } from "../utils/validators";
+import { notifyAllAdmins } from "./notification.controller";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 const TOKEN_EXPIRY = "7d";
@@ -15,24 +16,32 @@ const toPublicUser = (user: {
   name: string;
   email: string;
   mobile: string;
+  city?: string;
+  state?: string;
   role: Role;
   preferredLanguage?: Language;
+  isCoachingStudent?: boolean;
 }) => ({
   id: user._id,
   name: user.name,
   email: user.email,
   mobile: user.mobile,
+  city: user.city ?? "",
+  state: user.state ?? "",
   role: user.role,
   preferredLanguage: user.preferredLanguage ?? "English",
+  isCoachingStudent: user.isCoachingStudent ?? false,
 });
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, mobile, password } = req.body as {
+    const { name, email, mobile, password, city, state } = req.body as {
       name?: string;
       email?: string;
       mobile?: string;
       password?: string;
+      city?: string;
+      state?: string;
     };
 
     if (!name || !name.trim()) {
@@ -54,6 +63,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
+    if (!city || !city.trim()) {
+      res.status(400).json({ message: "City is required" });
+      return;
+    }
+    if (!state || !state.trim()) {
+      res.status(400).json({ message: "State is required" });
+      return;
+    }
 
     const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
@@ -67,8 +84,17 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       email: email.toLowerCase().trim(),
       mobile: mobile.trim(),
       password: hashedPassword,
+      city: city.trim(),
+      state: state.trim(),
       role: "student",
     });
+
+    await notifyAllAdmins(
+      "New Student Signup",
+      `${user.name} (${user.mobile}) from ${user.city}, ${user.state} just signed up. Review and tag them as a Coaching Student if they're yours.`,
+      "system",
+      { targetScreen: "adminStudentDetail" }
+    );
 
     const token = signToken(String(user._id), user.role);
     res.status(201).json({ user: toPublicUser(user), token });

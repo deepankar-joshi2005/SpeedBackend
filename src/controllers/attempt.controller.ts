@@ -5,7 +5,11 @@ import Question from "../models/question.model";
 import TestSeries from "../models/testSeries.model";
 import TestAttempt from "../models/testAttempt.model";
 import Notification from "../models/notification.model";
+import User from "../models/user.model";
 import { AuthRequest } from "../middleware/auth.middleware";
+
+const COACHING_ONLY_MESSAGE =
+  "This test is only for Coaching Students. Please contact your Coaching Admin for access.";
 
 export const startAttempt = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -27,6 +31,14 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
     if (!series) {
       res.status(404).json({ message: "Test series not found" });
       return;
+    }
+
+    if (test.accessLevel === "coachingOnly") {
+      const user = await User.findById(userId);
+      if (!user?.isCoachingStudent) {
+        res.status(403).json({ code: "COACHING_ONLY", message: COACHING_ONLY_MESSAGE });
+        return;
+      }
     }
 
     let attempt = await TestAttempt.findOne({ user: userId, test: testId, status: "in-progress" });
@@ -95,10 +107,11 @@ export const saveAnswer = async (req: AuthRequest, res: Response): Promise<void>
   try {
     const userId = req.userId as string;
     const { attemptId } = req.params;
-    const { questionId, selectedOption, markedForReview } = req.body as {
+    const { questionId, selectedOption, markedForReview, timeSpentSeconds } = req.body as {
       questionId?: string;
       selectedOption?: number | null;
       markedForReview?: boolean;
+      timeSpentSeconds?: number;
     };
 
     if (!questionId) {
@@ -116,16 +129,23 @@ export const saveAnswer = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    const safeTimeSpentSeconds =
+      timeSpentSeconds !== undefined && Number.isFinite(timeSpentSeconds)
+        ? Math.max(0, timeSpentSeconds)
+        : undefined;
+
     const existing = attempt.answers.find((a) => String(a.question) === questionId);
     if (existing) {
       if (selectedOption !== undefined) existing.selectedOption = selectedOption;
       if (markedForReview !== undefined) existing.markedForReview = markedForReview;
+      if (safeTimeSpentSeconds !== undefined) existing.timeSpentSeconds = safeTimeSpentSeconds;
     } else {
       attempt.answers.push({
         question: new mongoose.Types.ObjectId(questionId),
         selectedOption: selectedOption ?? null,
         markedForReview: markedForReview ?? false,
         isCorrect: null,
+        timeSpentSeconds: safeTimeSpentSeconds ?? 0,
       });
     }
 
@@ -174,6 +194,7 @@ export const submitAttempt = async (req: AuthRequest, res: Response): Promise<vo
       name: section.name,
       correct: 0,
       total: 0,
+      timeSpentSeconds: 0,
     }));
 
     for (const question of questions) {
@@ -186,6 +207,12 @@ export const submitAttempt = async (req: AuthRequest, res: Response): Promise<vo
       if (sectionIndex !== -1) sectionTally[sectionIndex].total += 1;
 
       const answer = attempt.answers.find((a) => String(a.question) === String(question._id));
+      if (sectionIndex !== -1) {
+        const answerTime = answer?.timeSpentSeconds;
+        sectionTally[sectionIndex].timeSpentSeconds += Number.isFinite(answerTime)
+          ? (answerTime as number)
+          : 0;
+      }
       if (!answer || answer.selectedOption === null) {
         skippedCount += 1;
       } else if (answer.selectedOption === question.correctOptionIndex) {
