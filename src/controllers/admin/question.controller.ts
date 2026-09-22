@@ -243,7 +243,58 @@ export const addToTest = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
-const REQUIRED_COLUMNS = [
+export const bulkAddToTest = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { testId, questionIds } = req.body as {
+      testId?: string;
+      questionIds?: string[];
+    };
+
+    if (!testId) {
+      res.status(400).json({ message: "testId is required" });
+      return;
+    }
+    if (!Array.isArray(questionIds) || questionIds.length === 0) {
+      res.status(400).json({ message: "questionIds array is required" });
+      return;
+    }
+
+    let startOrder = await Question.countDocuments({ test: testId });
+    const clones = [];
+
+    for (const qId of questionIds) {
+      const source = await Question.findById(qId);
+      if (!source) continue;
+
+      const clone = {
+        test: testId,
+        bankId: source.bankId,
+        subject: source.subject,
+        topic: source.topic,
+        text: source.text,
+        image: source.image,
+        options: source.options,
+        correctOptionIndex: source.correctOptionIndex,
+        explanation: source.explanation,
+        difficulty: source.difficulty,
+        marks: source.marks,
+        negativeMarks: source.negativeMarks,
+        order: startOrder++,
+      };
+      clones.push(clone);
+    }
+
+    const created = await Question.insertMany(clones);
+    await recalcTestTotals(testId);
+
+    res.status(201).json({
+      added: created.length,
+      message: `${created.length} question(s) added to the test.`,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to bulk add questions to test", error });
+  }
+};
   "Question",
   "Option A",
   "Option B",
