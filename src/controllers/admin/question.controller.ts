@@ -295,6 +295,8 @@ export const bulkAddToTest = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ message: "Failed to bulk add questions to test", error });
   }
 };
+
+const REQUIRED_COLUMNS = [
   "Question",
   "Option A",
   "Option B",
