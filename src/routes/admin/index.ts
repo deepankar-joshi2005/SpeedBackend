@@ -7,6 +7,9 @@ import testRoutes from "./test.routes";
 import questionRoutes from "./question.routes";
 import studentRoutes from "./student.routes";
 import uploadRoutes from "./upload.routes";
+import bannerRoutes from "./banner.routes";
+import teacherRoutes from "./teacher.routes";
+import successStoryRoutes from "./successStory.routes";
 
 const router = Router();
 
@@ -19,5 +22,8 @@ router.use("/tests", testRoutes);
 router.use("/questions", questionRoutes);
 router.use("/students", studentRoutes);
 router.use("/upload", uploadRoutes);
+router.use("/banners", bannerRoutes);
+router.use("/teacher-info", teacherRoutes);
+router.use("/success-stories", successStoryRoutes);
 
 export default router;

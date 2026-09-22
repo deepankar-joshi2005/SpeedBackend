@@ -16,7 +16,10 @@ export interface ITestSeries extends Document {
   durationMinutes: number;
   difficulty: string;
   accessType: AccessType;
+  isPaid?: boolean;
   price: number;
+  coachingPrice: number;
+  freeDemoCount: number;
   validityMonths: number;
   startDate: Date | null;
   endDate: Date | null;
@@ -39,7 +42,10 @@ const testSeriesSchema = new Schema<ITestSeries>({
   durationMinutes: { type: Number, default: 60 },
   difficulty: { type: String, default: "Mixed" },
   accessType: { type: String, enum: ["free", "paid"], default: "paid" },
+  isPaid: { type: Boolean, default: true },
   price: { type: Number, default: 0 },
+  coachingPrice: { type: Number, default: 0 },
+  freeDemoCount: { type: Number, default: 1 },
   validityMonths: { type: Number, default: 12 },
   startDate: { type: Date, default: null },
   endDate: { type: Date, default: null },

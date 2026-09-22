@@ -16,6 +16,7 @@ export interface IUser extends Document {
   preferredLanguage: Language;
   role: Role;
   isCoachingStudent: boolean;
+  purchasedSeries: mongoose.Types.ObjectId[];
   createdAt: Date;
 }
 
@@ -29,6 +30,7 @@ const userSchema = new Schema<IUser>({
   preferredLanguage: { type: String, enum: LANGUAGES, default: "English" },
   role: { type: String, enum: ROLES, default: "student" },
   isCoachingStudent: { type: Boolean, default: false },
+  purchasedSeries: [{ type: Schema.Types.ObjectId, ref: "TestSeries" }],
   createdAt: { type: Date, default: Date.now },
 });
 

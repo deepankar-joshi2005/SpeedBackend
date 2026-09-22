@@ -20,6 +20,8 @@ const ALLOWED_FIELDS = [
   "endDate",
   "accessType",
   "price",
+  "coachingPrice",
+  "freeDemoCount",
   "isPublic",
 ] as const;
 

@@ -9,6 +9,8 @@ import { AuthRequest } from "../middleware/auth.middleware";
 export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = new mongoose.Types.ObjectId(req.userId);
+    const userDoc = await mongoose.model("User").findById(userId);
+    const purchasedSeriesIds = new Set((userDoc?.purchasedSeries || []).map((id: any) => String(id)));
 
     const [seriesList, completedByCategory] = await Promise.all([
       TestSeries.find({ isAvailable: true, status: { $ne: "draft" } }),
@@ -21,10 +23,6 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
     const seriesIds = seriesList.map((s) => s._id);
     const tests = await Test.find({ series: { $in: seriesIds }, status: { $ne: "draft" } });
 
-    // Live counts always come from real Test/Question documents. A series'
-    // manually-entered "Total Mock Tests Count" only wins when it's set and
-    // no tests have been published yet (e.g. admin wants to show a planned
-    // total before adding tests) — otherwise the real, live count is shown.
     const testCountBySeries = new Map<string, number>();
     const questionCountBySeries = new Map<string, number>();
     for (const t of tests) {
@@ -39,24 +37,42 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
 
     const byCategory = new Map<
       string,
-      { totalTests: number; totalQuestions: number; durationMinutes: number; difficulty: string }
+      {
+        seriesId: string;
+        totalTests: number;
+        totalQuestions: number;
+        durationMinutes: number;
+        difficulty: string;
+        isPaid: boolean;
+        price: number;
+        coachingPrice: number;
+        isPurchased: boolean;
+      }
     >();
+
     for (const series of seriesList) {
       const seriesKey = String(series._id);
       const liveTestCount = testCountBySeries.get(seriesKey) ?? 0;
       const liveQuestionCount = questionCountBySeries.get(seriesKey) ?? 0;
       const displayTests = liveTestCount > 0 ? liveTestCount : series.totalPapers;
+      const purchased = purchasedSeriesIds.has(seriesKey);
 
       const existing = byCategory.get(series.category);
       if (existing) {
         existing.totalTests += displayTests;
         existing.totalQuestions += liveQuestionCount;
+        if (purchased) existing.isPurchased = true;
       } else {
         byCategory.set(series.category, {
+          seriesId: seriesKey,
           totalTests: displayTests,
           totalQuestions: liveQuestionCount,
           durationMinutes: series.durationMinutes,
           difficulty: series.difficulty,
+          isPaid: series ? (series.accessType === "paid" || !!series.isPaid) : false,
+          price: series.price || 0,
+          coachingPrice: series.coachingPrice || 0,
+          isPurchased: purchased,
         });
       }
     }
@@ -74,12 +90,17 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
 
         return {
           category: cat.name,
+          seriesId: agg.seriesId,
           iconImage: cat.iconImage,
           totalTests: agg.totalTests,
           totalQuestions: agg.totalQuestions,
           durationMinutes: agg.durationMinutes,
           difficulty: agg.difficulty,
           percentCompleted,
+          isPaid: agg.isPaid,
+          price: agg.price,
+          coachingPrice: agg.coachingPrice,
+          isPurchased: agg.isPurchased,
         };
       });
 
@@ -94,6 +115,9 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
     const userId = req.userId as string;
     const category = req.params.category;
 
+    const userDoc = await mongoose.model("User").findById(userId);
+    const purchasedSeriesIds = new Set((userDoc?.purchasedSeries || []).map((id: any) => String(id)));
+
     const categoryDoc = await Category.findOne({ name: category, isActive: true });
     if (!categoryDoc) {
       res.status(400).json({ message: "Unknown category" });
@@ -105,11 +129,16 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
       isAvailable: true,
       status: { $ne: "draft" },
     });
+    const series = seriesList[0];
     const seriesIds = seriesList.map((s) => s._id);
     const tests = await Test.find({
       series: { $in: seriesIds },
       status: { $ne: "draft" },
     }).sort({ order: 1 });
+
+    const isSeriesPurchased = series ? purchasedSeriesIds.has(String(series._id)) : false;
+    const isSeriesPaid = series ? (series.accessType === "paid" || !!series.isPaid) : false;
+    const freeDemoCount = series?.freeDemoCount ?? 1;
 
     const attempts = await TestAttempt.find({
       user: userId,
@@ -125,9 +154,15 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
 
     res.status(200).json({
       category,
-      seriesTitle: seriesList[0]?.title ?? `${category} Mock Tests`,
-      bannerImage: seriesList[0]?.bannerImage ?? null,
-      tests: tests.map((t) => {
+      seriesId: series ? String(series._id) : null,
+      seriesTitle: series?.title ?? `${category} Mock Tests`,
+      bannerImage: series?.bannerImage ?? null,
+      isPaid: isSeriesPaid,
+      price: series?.price ?? 0,
+      coachingPrice: series?.coachingPrice ?? 0,
+      isPurchased: isSeriesPurchased,
+      isCoachingStudent: !!userDoc?.isCoachingStudent,
+      tests: tests.map((t, idx) => {
         const testAttempts = attemptsByTest.get(String(t._id)) ?? [];
         const inProgress = testAttempts.find((a) => a.status === "in-progress");
         const completed = testAttempts
@@ -143,6 +178,9 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
         const canReattempt =
           status === "completed" && (t.maxAttempts === 0 || attemptsUsed < t.maxAttempts);
 
+        const isFree = !isSeriesPaid || isSeriesPurchased || idx < freeDemoCount || !!t.isFreeDemo;
+        const isLocked = !isFree;
+
         return {
           id: t._id,
           title: t.title,
@@ -157,6 +195,8 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
           maxAttempts: t.maxAttempts,
           attemptsUsed,
           canReattempt,
+          isFreeDemo: idx < freeDemoCount || !!t.isFreeDemo,
+          isLocked,
         };
       }),
     });

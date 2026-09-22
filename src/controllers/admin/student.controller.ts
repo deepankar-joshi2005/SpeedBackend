@@ -2,6 +2,7 @@ import { Response } from "express";
 import User from "../../models/user.model";
 import TestAttempt from "../../models/testAttempt.model";
 import Notification from "../../models/notification.model";
+import Purchase from "../../models/purchase.model";
 import { AuthRequest } from "../../middleware/auth.middleware";
 
 export const listStudents = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -19,13 +20,17 @@ export const listStudents = async (req: AuthRequest, res: Response): Promise<voi
     const students = await User.find(filter).sort({ createdAt: -1 }).limit(200);
     const withStats = await Promise.all(
       students.map(async (student) => {
-        const attempts = await TestAttempt.find({ user: student._id, status: "completed" });
+        const [attempts, purchases] = await Promise.all([
+          TestAttempt.find({ user: student._id, status: "completed" }),
+          Purchase.find({ user: student._id, status: "success" }),
+        ]);
         const attemptCount = attempts.length;
         const avgScore = attemptCount
           ? Math.round(
               attempts.reduce((sum, a) => sum + (a.scorePercent ?? 0), 0) / attemptCount
             )
           : 0;
+        const totalSpent = purchases.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
 
         return {
           id: student._id,
@@ -38,6 +43,8 @@ export const listStudents = async (req: AuthRequest, res: Response): Promise<voi
           joinedAt: student.createdAt,
           attemptCount,
           avgScore,
+          purchasesCount: purchases.length,
+          totalSpent,
         };
       })
     );
@@ -56,7 +63,11 @@ export const getStudentDetail = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const attempts = await TestAttempt.find({ user: student._id }).sort({ startedAt: -1 });
+    const [attempts, purchases] = await Promise.all([
+      TestAttempt.find({ user: student._id }).sort({ startedAt: -1 }),
+      Purchase.find({ user: student._id, status: "success" }).populate("testSeries", "title accessType price coachingPrice"),
+    ]);
+
     const completed = attempts.filter((a) => a.status === "completed");
 
     // Aggregate weak-area analysis by section name across every completed attempt.
@@ -84,6 +95,7 @@ export const getStudentDetail = async (req: AuthRequest, res: Response): Promise
     const avgAccuracy = completed.length
       ? Math.round(completed.reduce((sum, a) => sum + (a.accuracy ?? 0), 0) / completed.length)
       : 0;
+    const totalSpent = purchases.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
 
     res.status(200).json({
       id: student._id,
@@ -98,7 +110,16 @@ export const getStudentDetail = async (req: AuthRequest, res: Response): Promise
         attemptCount: completed.length,
         avgScore,
         avgAccuracy,
+        purchasesCount: purchases.length,
+        totalSpent,
       },
+      purchasedSeries: purchases.map((p) => ({
+        purchaseId: p._id,
+        seriesId: (p.testSeries as any)?._id || p.testSeries,
+        title: (p.testSeries as any)?.title || "Test Series",
+        amountPaid: p.amountPaid,
+        purchasedAt: p.createdAt,
+      })),
       weakAreas: sectionAnalysis,
       attempts: attempts.map((a) => ({
         attemptId: a._id,

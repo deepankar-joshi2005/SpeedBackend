@@ -6,6 +6,7 @@ import TestSeries from "../models/testSeries.model";
 import TestAttempt from "../models/testAttempt.model";
 import Notification from "../models/notification.model";
 import User from "../models/user.model";
+import Purchase from "../models/purchase.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 
 const COACHING_ONLY_MESSAGE =
@@ -33,12 +34,52 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    const user = await User.findById(userId);
+
     if (test.accessLevel === "coachingOnly") {
-      const user = await User.findById(userId);
       if (!user?.isCoachingStudent) {
         res.status(403).json({ code: "COACHING_ONLY", message: COACHING_ONLY_MESSAGE });
         return;
       }
+    }
+
+    // ─── STRICT SECURITY CHECK: Paid Test Series Entitlement ────────────────
+    if (series.accessType === "paid") {
+      const isPurchased =
+        user?.purchasedSeries?.some((id) => String(id) === String(series._id)) ||
+        (await Purchase.exists({ user: userId, testSeries: series._id, status: "success" }));
+
+      const isFreeDemo = test.isFreeDemo || test.order < (series.freeDemoCount ?? 1);
+
+      if (!isPurchased && !isFreeDemo) {
+        const requiredPrice = user?.isCoachingStudent
+          ? (series.coachingPrice > 0 ? series.coachingPrice : series.price)
+          : series.price;
+
+        res.status(403).json({
+          code: "TEST_SERIES_PAID",
+          message: "This test is part of a Paid Test Series. Please purchase the test series to unlock all tests.",
+          seriesId: series._id,
+          price: requiredPrice,
+          isCoachingStudent: user?.isCoachingStudent ?? false,
+        });
+        return;
+      }
+    }
+
+    const now = new Date();
+    if (test.startDate && now < new Date(test.startDate)) {
+      res.status(403).json({
+        message: `This test is scheduled to start on ${new Date(test.startDate).toLocaleString()}. Please wait until then.`,
+      });
+      return;
+    }
+
+    if (test.endDate && now > new Date(test.endDate)) {
+      res.status(403).json({
+        message: `This test ended on ${new Date(test.endDate).toLocaleString()} and is no longer available.`,
+      });
+      return;
     }
 
     let attempt = await TestAttempt.findOne({ user: userId, test: testId, status: "in-progress" });

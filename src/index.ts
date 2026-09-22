@@ -12,6 +12,7 @@ import performanceRoutes from "./routes/performance.routes";
 import profileRoutes from "./routes/profile.routes";
 import notificationsRoutes from "./routes/notifications.routes";
 import supportRoutes from "./routes/support.routes";
+import purchaseRoutes from "./routes/purchase.router";
 import adminRoutes from "./routes/admin";
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.use("/api/performance", performanceRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/purchases", purchaseRoutes);
 app.use("/api/admin", adminRoutes);
 
 connectDB().then(() => {

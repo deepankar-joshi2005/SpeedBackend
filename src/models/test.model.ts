@@ -29,6 +29,7 @@ export interface ITest extends Document {
   order: number;
   subjectSections: ISubjectSection[];
   accessLevel: TestAccessLevel;
+  isFreeDemo: boolean;
   createdAt: Date;
 }
 
@@ -60,6 +61,7 @@ const testSchema = new Schema<ITest>({
   order: { type: Number, default: 0 },
   subjectSections: { type: [subjectSectionSchema], default: [] },
   accessLevel: { type: String, enum: ["all", "coachingOnly"], default: "coachingOnly" },
+  isFreeDemo: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 
