@@ -59,11 +59,20 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
       ? (series.coachingPrice > 0 ? series.coachingPrice : series.price)
       : series.price;
 
+    if (isPaidSeries && amount <= 0) {
+      // Data bug: series is marked paid but has no price configured — never
+      // fall through to a fake order, Razorpay will reject it with a JS error.
+      res.status(400).json({
+        message: "This test series has no price configured. Please contact support.",
+      });
+      return;
+    }
+
     const amountInPaise = Math.round(amount * 100);
     const keyId = getRazorpayKeyId();
 
-    if (!keyId || amountInPaise === 0) {
-      // Fallback for free or dev mode
+    if (!isPaidSeries || !keyId) {
+      // Fallback for genuinely free series, or Razorpay creds missing (dev mode)
       const dummyOrder = await Order.create({
         user: userId,
         series: series._id,
@@ -182,74 +191,6 @@ export const verifyPayment = async (req: AuthRequest, res: Response): Promise<vo
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to verify payment", error });
-  }
-};
-
-export const buySeries = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.userId as string;
-    const { testSeriesId } = req.body as { testSeriesId?: string };
-
-    if (!testSeriesId) {
-      res.status(400).json({ message: "testSeriesId is required" });
-      return;
-    }
-
-    const series = await TestSeries.findById(testSeriesId);
-    if (!series) {
-      res.status(404).json({ message: "Test series not found" });
-      return;
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
-      return;
-    }
-
-    const existing = await Purchase.findOne({ user: userId, testSeries: testSeriesId, status: "success" });
-    if (existing) {
-      res.status(200).json({
-        message: "You already own this test series.",
-        purchase: existing,
-        purchasedSeries: user.purchasedSeries || [testSeriesId],
-      });
-      return;
-    }
-
-    const isCoaching = !!user.isCoachingStudent;
-    const isPaidSeries = series.accessType === "paid" || !!series.isPaid;
-    const amountPaid = !isPaidSeries
-      ? 0
-      : isCoaching
-      ? (series.coachingPrice > 0 ? series.coachingPrice : series.price)
-      : series.price;
-
-    const paymentId = `PAY_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-
-    const purchase = await Purchase.create({
-      user: userId,
-      testSeries: testSeriesId,
-      amountPaid,
-      isCoachingStudent: isCoaching,
-      paymentId,
-      status: "success",
-      createdAt: new Date(),
-    });
-
-    if (!user.purchasedSeries) user.purchasedSeries = [];
-    if (!user.purchasedSeries.some((id) => String(id) === String(testSeriesId))) {
-      user.purchasedSeries.push(series._id as any);
-      await user.save();
-    }
-
-    res.status(200).json({
-      message: "Test series unlocked successfully!",
-      purchase,
-      purchasedSeries: user.purchasedSeries,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to process purchase", error });
   }
 };
 
