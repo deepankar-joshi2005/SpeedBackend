@@ -2,10 +2,20 @@ import { Response } from "express";
 import SuccessStory from "../../models/successStory.model";
 import { AuthRequest } from "../../middleware/auth.middleware";
 
+const normalizeStory = (s: any) => ({
+  id: String(s._id),
+  studentName: s.studentName,
+  studentImage: s.studentImage || "",
+  examTag: s.examTag,
+  reviewText: s.reviewText,
+  displayOrder: s.displayOrder,
+  isActive: s.isActive,
+});
+
 export const getAdminSuccessStories = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const stories = await SuccessStory.find().sort({ displayOrder: 1, createdAt: -1 });
-    res.status(200).json(stories);
+    res.status(200).json(stories.map(normalizeStory));
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch success stories", error });
   }
@@ -26,7 +36,7 @@ export const createAdminSuccessStory = async (req: AuthRequest, res: Response): 
       displayOrder: displayOrder ? Number(displayOrder) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
-    res.status(201).json(story);
+    res.status(201).json(normalizeStory(story));
   } catch (error) {
     res.status(500).json({ message: "Failed to create success story", error });
   }
@@ -45,7 +55,7 @@ export const updateAdminSuccessStory = async (req: AuthRequest, res: Response): 
       res.status(404).json({ message: "Success story not found" });
       return;
     }
-    res.status(200).json(story);
+    res.status(200).json(normalizeStory(story));
   } catch (error) {
     res.status(500).json({ message: "Failed to update success story", error });
   }
