@@ -9,10 +9,13 @@ export interface IQuestion extends Document {
   subject: string;
   topic: string;
   text: string;
+  textHindi: string;
   image: string | null;
   options: string[];
+  optionsHindi: string[];
   correctOptionIndex: number;
   explanation: string;
+  explanationHindi: string;
   difficulty: QuestionDifficulty;
   marks: number;
   negativeMarks: number;
@@ -26,10 +29,17 @@ const questionSchema = new Schema<IQuestion>({
   subject: { type: String, required: true, trim: true },
   topic: { type: String, default: "", trim: true },
   text: { type: String, required: true, trim: true },
+  textHindi: { type: String, default: "", trim: true },
   image: { type: String, default: null },
   options: { type: [String], required: true, validate: (v: string[]) => v.length === 4 },
+  optionsHindi: {
+    type: [String],
+    default: [],
+    validate: (v: string[]) => v.length === 0 || v.length === 4,
+  },
   correctOptionIndex: { type: Number, required: true, min: 0, max: 3 },
   explanation: { type: String, default: "" },
+  explanationHindi: { type: String, default: "" },
   difficulty: { type: String, enum: DIFFICULTIES, default: "Moderate" },
   marks: { type: Number, default: 2 },
   negativeMarks: { type: Number, default: 0.25 },

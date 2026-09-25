@@ -19,7 +19,10 @@ export interface ISubjectBreakdown {
 export interface ISectionBreakdown {
   name: string;
   correct: number;
+  wrong: number;
+  attempted: number;
   total: number;
+  score: number;
   timeSpentSeconds: number;
 }
 
@@ -43,6 +46,7 @@ export interface ITestAttempt extends Document {
   accuracy: number | null;
   rank: number | null;
   totalCandidates: number | null;
+  topScore: number | null;
   subjectBreakdown: ISubjectBreakdown[];
   sectionBreakdown: ISectionBreakdown[];
   createdAt: Date;
@@ -73,7 +77,10 @@ const sectionBreakdownSchema = new Schema<ISectionBreakdown>(
   {
     name: { type: String, required: true },
     correct: { type: Number, required: true },
+    wrong: { type: Number, default: 0 },
+    attempted: { type: Number, default: 0 },
     total: { type: Number, required: true },
+    score: { type: Number, default: 0 },
     timeSpentSeconds: { type: Number, default: 0 },
   },
   { _id: false }
@@ -99,6 +106,7 @@ const testAttemptSchema = new Schema<ITestAttempt>({
   accuracy: { type: Number, default: null },
   rank: { type: Number, default: null },
   totalCandidates: { type: Number, default: null },
+  topScore: { type: Number, default: null },
   subjectBreakdown: { type: [subjectBreakdownSchema], default: [] },
   sectionBreakdown: { type: [sectionBreakdownSchema], default: [] },
   createdAt: { type: Date, default: Date.now },

@@ -17,6 +17,7 @@ export interface IUser extends Document {
   role: Role;
   isCoachingStudent: boolean;
   purchasedSeries: mongoose.Types.ObjectId[];
+  viewedEbookIds: mongoose.Types.ObjectId[];
   createdAt: Date;
 }
 
@@ -31,6 +32,7 @@ const userSchema = new Schema<IUser>({
   role: { type: String, enum: ROLES, default: "student" },
   isCoachingStudent: { type: Boolean, default: false },
   purchasedSeries: [{ type: Schema.Types.ObjectId, ref: "TestSeries" }],
+  viewedEbookIds: [{ type: Schema.Types.ObjectId, ref: "Ebook" }],
   createdAt: { type: Date, default: Date.now },
 });
 

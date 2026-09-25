@@ -89,10 +89,13 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       subject,
       topic,
       text,
+      textHindi,
       image,
       options,
+      optionsHindi,
       correctOptionIndex,
       explanation,
+      explanationHindi,
       difficulty,
       marks,
       negativeMarks,
@@ -101,10 +104,13 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       subject?: string;
       topic?: string;
       text?: string;
+      textHindi?: string;
       image?: string;
       options?: string[];
+      optionsHindi?: string[];
       correctOptionIndex?: number;
       explanation?: string;
+      explanationHindi?: string;
       difficulty?: string;
       marks?: number;
       negativeMarks?: number;
@@ -131,16 +137,28 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    if (
+      Array.isArray(optionsHindi) &&
+      optionsHindi.length > 0 &&
+      optionsHindi.length !== 4
+    ) {
+      res.status(400).json({ message: "Hindi options must have exactly four entries" });
+      return;
+    }
+
     const order = testId ? await Question.countDocuments({ test: testId }) : 0;
     const question = await Question.create({
       test: testId || null,
       subject: subject.trim(),
       topic: topic ?? "",
       text: text.trim(),
+      textHindi: textHindi?.trim() ?? "",
       image: image ?? null,
       options,
+      optionsHindi: optionsHindi ?? [],
       correctOptionIndex,
       explanation: explanation ?? "",
+      explanationHindi: explanationHindi ?? "",
       difficulty: (difficulty as QuestionDifficulty) ?? "Moderate",
       marks: marks ?? 2,
       negativeMarks: negativeMarks ?? 0.25,
@@ -161,10 +179,13 @@ export const updateQuestion = async (req: AuthRequest, res: Response): Promise<v
       "subject",
       "topic",
       "text",
+      "textHindi",
       "image",
       "options",
+      "optionsHindi",
       "correctOptionIndex",
       "explanation",
+      "explanationHindi",
       "difficulty",
       "marks",
       "negativeMarks",
@@ -225,10 +246,13 @@ export const addToTest = async (req: AuthRequest, res: Response): Promise<void> 
       subject: source.subject,
       topic: source.topic,
       text: source.text,
+      textHindi: source.textHindi,
       image: source.image,
       options: source.options,
+      optionsHindi: source.optionsHindi,
       correctOptionIndex: source.correctOptionIndex,
       explanation: source.explanation,
+      explanationHindi: source.explanationHindi,
       difficulty: source.difficulty,
       marks: marks ?? source.marks,
       negativeMarks: source.negativeMarks,
@@ -272,10 +296,13 @@ export const bulkAddToTest = async (req: AuthRequest, res: Response): Promise<vo
         subject: source.subject,
         topic: source.topic,
         text: source.text,
+        textHindi: source.textHindi,
         image: source.image,
         options: source.options,
+        optionsHindi: source.optionsHindi,
         correctOptionIndex: source.correctOptionIndex,
         explanation: source.explanation,
+        explanationHindi: source.explanationHindi,
         difficulty: source.difficulty,
         marks: source.marks,
         negativeMarks: source.negativeMarks,

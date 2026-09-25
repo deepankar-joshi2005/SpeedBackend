@@ -115,10 +115,8 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       const now = new Date();
       const activePublishedTests = await Test.find({
         status: "published",
-        $or: [
-          { startDate: { $lte: now }, $or: [{ endDate: null }, { endDate: { $gte: now } }] },
-          { startDate: null, endDate: null },
-        ],
+        startDate: { $ne: null, $lte: now },
+        endDate: { $ne: null, $gte: now },
       }).populate("series", "title category").limit(10);
 
       const liveMocks = activePublishedTests.map((t, idx) => ({

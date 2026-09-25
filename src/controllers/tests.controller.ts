@@ -229,3 +229,60 @@ export const getTestInstructions = async (req: AuthRequest, res: Response): Prom
     res.status(500).json({ message: "Failed to load test instructions", error });
   }
 };
+
+export const getFreeTests = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const seriesList = await TestSeries.find({ isAvailable: true, status: { $ne: "draft" } });
+    const seriesMap = new Map(seriesList.map((s) => [String(s._id), s]));
+
+    const tests = await Test.find({
+      series: { $in: seriesList.map((s) => s._id) },
+      status: { $ne: "draft" },
+    }).sort({ series: 1, order: 1 });
+
+    const testsBySeries = new Map<string, typeof tests>();
+    for (const t of tests) {
+      const key = String(t.series);
+      const arr = testsBySeries.get(key) ?? [];
+      arr.push(t);
+      testsBySeries.set(key, arr);
+    }
+
+    const freeTests: Array<{
+      id: unknown;
+      title: string;
+      category: string;
+      seriesTitle: string;
+      totalQuestions: number;
+      durationMinutes: number;
+      totalMarks: number;
+      difficulty: string;
+    }> = [];
+
+    for (const [seriesId, seriesTests] of testsBySeries) {
+      const series = seriesMap.get(seriesId);
+      if (!series) continue;
+      const isSeriesFree = !(series.accessType === "paid" || !!series.isPaid);
+      const freeDemoCount = series.freeDemoCount ?? 1;
+
+      seriesTests.forEach((t, idx) => {
+        const isFree = isSeriesFree || !!t.isFreeDemo || idx < freeDemoCount;
+        if (!isFree) return;
+        freeTests.push({
+          id: t._id,
+          title: t.title,
+          category: series.category,
+          seriesTitle: series.title,
+          totalQuestions: t.totalQuestions,
+          durationMinutes: t.durationMinutes,
+          totalMarks: t.totalMarks,
+          difficulty: t.difficulty,
+        });
+      });
+    }
+
+    res.status(200).json(freeTests);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load free tests", error });
+  }
+};

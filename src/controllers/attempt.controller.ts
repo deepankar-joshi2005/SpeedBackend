@@ -130,7 +130,9 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
         id: q._id,
         subject: q.subject,
         text: q.text,
+        textHindi: q.textHindi || null,
         options: q.options,
+        optionsHindi: q.optionsHindi && q.optionsHindi.length === 4 ? q.optionsHindi : null,
         order: q.order,
       })),
       answers: attempt.answers.map((a) => ({
@@ -234,7 +236,10 @@ export const submitAttempt = async (req: AuthRequest, res: Response): Promise<vo
     const sectionTally = test.subjectSections.map((section) => ({
       name: section.name,
       correct: 0,
+      wrong: 0,
+      attempted: 0,
       total: 0,
+      score: 0,
       timeSpentSeconds: 0,
     }));
 
@@ -254,18 +259,29 @@ export const submitAttempt = async (req: AuthRequest, res: Response): Promise<vo
           ? (answerTime as number)
           : 0;
       }
+      const questionMarks = question.marks ?? test.totalMarks / test.totalQuestions;
       if (!answer || answer.selectedOption === null) {
         skippedCount += 1;
       } else if (answer.selectedOption === question.correctOptionIndex) {
         correctCount += 1;
-        score += question.marks ?? test.totalMarks / test.totalQuestions;
+        score += questionMarks;
         answer.isCorrect = true;
         subjectStat.correct += 1;
-        if (sectionIndex !== -1) sectionTally[sectionIndex].correct += 1;
+        if (sectionIndex !== -1) {
+          sectionTally[sectionIndex].correct += 1;
+          sectionTally[sectionIndex].attempted += 1;
+          sectionTally[sectionIndex].score += questionMarks;
+        }
       } else {
         wrongCount += 1;
+        if (sectionIndex !== -1) {
+          sectionTally[sectionIndex].wrong += 1;
+          sectionTally[sectionIndex].attempted += 1;
+        }
         if (test.negativeMarkingEnabled) {
-          score -= question.negativeMarks ?? test.negativeMarks;
+          const negMarks = question.negativeMarks ?? test.negativeMarks;
+          score -= negMarks;
+          if (sectionIndex !== -1) sectionTally[sectionIndex].score -= negMarks;
         }
         answer.isCorrect = false;
       }
@@ -273,6 +289,9 @@ export const submitAttempt = async (req: AuthRequest, res: Response): Promise<vo
       subjectTally.set(question.subject, subjectStat);
     }
 
+    sectionTally.forEach((s) => {
+      s.score = Math.round(s.score * 100) / 100;
+    });
     score = Math.round(score * 100) / 100;
     const scorePercent = Math.max(0, Math.round((score / test.totalMarks) * 100));
     const accuracy =
@@ -331,7 +350,7 @@ export const submitAttempt = async (req: AuthRequest, res: Response): Promise<vo
       targetScreen: "solutionReview",
     });
 
-    res.status(200).json(buildResultPayload(attempt, test.totalMarks, test.passingMarks));
+    res.status(200).json(await buildResultPayload(attempt, test, userId));
   } catch (error) {
     res.status(500).json({ message: "Failed to submit test", error });
   }
@@ -348,7 +367,7 @@ export const getResult = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
     const test = await Test.findById(attempt.test);
-    res.status(200).json(buildResultPayload(attempt, test?.totalMarks ?? 100, test?.passingMarks));
+    res.status(200).json(await buildResultPayload(attempt, test, userId));
   } catch (error) {
     res.status(500).json({ message: "Failed to load result", error });
   }
@@ -380,9 +399,12 @@ export const getSolutions = async (req: AuthRequest, res: Response): Promise<voi
           id: q._id,
           subject: q.subject,
           text: q.text,
+          textHindi: q.textHindi || null,
           options: q.options,
+          optionsHindi: q.optionsHindi && q.optionsHindi.length === 4 ? q.optionsHindi : null,
           correctOptionIndex: q.correctOptionIndex,
           explanation: q.explanation,
+          explanationHindi: q.explanationHindi || null,
           selectedOption: answer?.selectedOption ?? null,
           isCorrect: answer?.isCorrect ?? null,
         };
@@ -425,11 +447,80 @@ export const getHistory = async (req: AuthRequest, res: Response): Promise<void>
   }
 };
 
-function buildResultPayload(
+async function buildResultPayload(
   attempt: InstanceType<typeof TestAttempt>,
-  totalMarks: number,
-  passingMarks?: number
+  test: InstanceType<typeof Test> | null,
+  userId: string
 ) {
+  const totalMarks = test?.totalMarks ?? 100;
+  const passingMarks = test?.passingMarks;
+
+  const completedAttempts = await TestAttempt.find({
+    test: attempt.test,
+    status: "completed",
+  });
+
+  const attemptsUsedByUser = completedAttempts.filter(
+    (a) => String(a.user) === String(userId)
+  ).length;
+
+  // Overall best-score-per-user aggregation (used for the top score and the
+  // percentile-vs-score curve on the Comparison tab).
+  const bestByOtherUser = new Map<string, number>();
+  for (const a of completedAttempts) {
+    if (String(a.user) === String(userId)) continue;
+    const uid = String(a.user);
+    const existingBest = bestByOtherUser.get(uid);
+    if (existingBest === undefined || (a.score ?? 0) > existingBest) {
+      bestByOtherUser.set(uid, a.score ?? 0);
+    }
+  }
+  const otherBestScores = Array.from(bestByOtherUser.values());
+  const myScore = attempt.score ?? 0;
+  const allBestScores = [...otherBestScores, myScore].sort((a, b) => a - b);
+  const topScore = allBestScores[allBestScores.length - 1] ?? myScore;
+  const uniqueScores = Array.from(new Set(allBestScores)).sort((a, b) => a - b);
+  const scoreDistribution = uniqueScores.map((s) => {
+    const countLEQ = allBestScores.filter((v) => v <= s).length;
+    return {
+      score: s,
+      percentile: Math.round((countLEQ / allBestScores.length) * 1000) / 10,
+    };
+  });
+
+  // Same best-per-user aggregation, scoped per section, for section rank/top score.
+  const sectionBestByOtherUser = new Map<string, Map<string, number>>();
+  for (const a of completedAttempts) {
+    if (String(a.user) === String(userId)) continue;
+    const uid = String(a.user);
+    for (const sec of a.sectionBreakdown ?? []) {
+      const secMap = sectionBestByOtherUser.get(sec.name) ?? new Map<string, number>();
+      const secScore = sec.score ?? 0;
+      const prev = secMap.get(uid);
+      if (prev === undefined || secScore > prev) secMap.set(uid, secScore);
+      sectionBestByOtherUser.set(sec.name, secMap);
+    }
+  }
+  const sectionBreakdown = (attempt.sectionBreakdown ?? []).map((sec) => {
+    const others = Array.from(sectionBestByOtherUser.get(sec.name)?.values() ?? []);
+    const mySecScore = sec.score ?? 0;
+    const secRank = others.filter((v) => v > mySecScore).length + 1;
+    const secTopScore = Math.max(mySecScore, ...others);
+    return {
+      name: sec.name,
+      correct: sec.correct,
+      wrong: sec.wrong ?? 0,
+      attempted: sec.attempted ?? sec.correct + (sec.wrong ?? 0),
+      total: sec.total,
+      score: mySecScore,
+      timeSpentSeconds: sec.timeSpentSeconds,
+      rank: secRank,
+      topScore: secTopScore,
+    };
+  });
+
+  const canReattempt = !test || test.maxAttempts === 0 || attemptsUsedByUser < test.maxAttempts;
+
   return {
     attemptId: attempt._id,
     testId: attempt.test,
@@ -445,7 +536,10 @@ function buildResultPayload(
     timeTakenSeconds: attempt.timeTakenSeconds,
     rank: attempt.rank,
     totalCandidates: attempt.totalCandidates,
+    topScore,
+    canReattempt,
     subjectBreakdown: attempt.subjectBreakdown,
-    sectionBreakdown: attempt.sectionBreakdown,
+    sectionBreakdown,
+    scoreDistribution,
   };
 }

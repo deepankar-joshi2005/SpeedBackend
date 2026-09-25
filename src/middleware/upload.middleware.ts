@@ -44,3 +44,45 @@ export const uploadImport = multer({
     cb(null, true);
   },
 });
+
+const PYQ_DIR = path.join(UPLOADS_DIR, "pyq");
+if (!fs.existsSync(PYQ_DIR)) {
+  fs.mkdirSync(PYQ_DIR, { recursive: true });
+}
+
+const EBOOK_DIR = path.join(UPLOADS_DIR, "ebooks");
+if (!fs.existsSync(EBOOK_DIR)) {
+  fs.mkdirSync(EBOOK_DIR, { recursive: true });
+}
+
+const pdfFileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
+  const isPdf = file.mimetype === "application/pdf" || /\.pdf$/i.test(file.originalname);
+  if (!isPdf) {
+    cb(new Error("Only PDF files are allowed"));
+    return;
+  }
+  cb(null, true);
+};
+
+const pdfFilename: multer.DiskStorageOptions["filename"] = (_req, file, cb) => {
+  const safeName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+  cb(null, `${Date.now()}-${safeName}`);
+};
+
+export const uploadPyqPdf = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, PYQ_DIR),
+    filename: pdfFilename,
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: pdfFileFilter,
+});
+
+export const uploadEbookPdf = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, EBOOK_DIR),
+    filename: pdfFilename,
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: pdfFileFilter,
+});

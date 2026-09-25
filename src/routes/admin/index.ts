@@ -10,6 +10,8 @@ import uploadRoutes from "./upload.routes";
 import bannerRoutes from "./banner.routes";
 import teacherRoutes from "./teacher.routes";
 import successStoryRoutes from "./successStory.routes";
+import pyqRoutes from "./pyq.routes";
+import ebookRoutes from "./ebook.routes";
 
 const router = Router();
 
@@ -25,5 +27,7 @@ router.use("/upload", uploadRoutes);
 router.use("/banners", bannerRoutes);
 router.use("/teacher-info", teacherRoutes);
 router.use("/success-stories", successStoryRoutes);
+router.use("/pyq", pyqRoutes);
+router.use("/ebooks", ebookRoutes);
 
 export default router;
