@@ -1,15 +1,32 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import User, { Role, Language } from "../models/user.model";
 import { isValidEmail, isValidMobile, isStrongPassword } from "../utils/validators";
 import { notifyAllAdmins } from "./notification.controller";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
-const TOKEN_EXPIRY = "7d";
+const TOKEN_EXPIRY = "5d";
+const SESSION_TTL_MS = 5 * 24 * 60 * 60 * 1000; // matches TOKEN_EXPIRY — a stale session self-heals
 
 const signToken = (userId: string, role: Role): string =>
   jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+
+// A session older than the token lifetime can no longer be "logged in" for
+// real (its token has expired), so treat it as free rather than locking the
+// account out forever if a device was lost/uninstalled without logging out.
+const isSessionStale = (activeSessionAt: Date | null | undefined): boolean => {
+  if (!activeSessionAt) return true;
+  return Date.now() - activeSessionAt.getTime() > SESSION_TTL_MS;
+};
+
+const claimSession = async (user: InstanceType<typeof User>): Promise<void> => {
+  user.activeSessionId = crypto.randomUUID();
+  user.activeSessionAt = new Date();
+  await user.save();
+};
 
 const toPublicUser = (user: {
   _id: unknown;
@@ -21,6 +38,7 @@ const toPublicUser = (user: {
   role: Role;
   preferredLanguage?: Language;
   isCoachingStudent?: boolean;
+  profileImage?: string | null;
 }) => ({
   id: user._id,
   name: user.name,
@@ -31,6 +49,7 @@ const toPublicUser = (user: {
   role: user.role,
   preferredLanguage: user.preferredLanguage ?? "English",
   isCoachingStudent: user.isCoachingStudent ?? false,
+  profileImage: user.profileImage ?? null,
 });
 
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -96,6 +115,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       { targetScreen: "adminStudentDetail" }
     );
 
+    await claimSession(user);
     const token = signToken(String(user._id), user.role);
     res.status(201).json({ user: toPublicUser(user), token });
   } catch (error) {
@@ -124,9 +144,31 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (user.activeSessionId && !isSessionStale(user.activeSessionAt)) {
+      res.status(409).json({
+        code: "ALREADY_LOGGED_IN",
+        message:
+          "Your account is already logged in on another device. Please logout there first, then try again here.",
+      });
+      return;
+    }
+
+    await claimSession(user);
     const token = signToken(String(user._id), user.role);
     res.status(200).json({ user: toPublicUser(user), token });
   } catch (error) {
     res.status(500).json({ message: "Failed to login", error });
+  }
+};
+
+export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await User.findByIdAndUpdate(req.userId, {
+      activeSessionId: null,
+      activeSessionAt: null,
+    });
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to logout", error });
   }
 };

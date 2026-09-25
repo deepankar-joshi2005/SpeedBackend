@@ -9,6 +9,7 @@ import { notifyAllStudents } from "../notification.controller";
 const ALLOWED_FIELDS = [
   "title",
   "category",
+  "kind",
   "examTarget",
   "description",
   "shortDescription",
@@ -43,16 +44,21 @@ async function liveCounts(seriesId: string) {
 
 export const listSeries = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { status, search } = req.query as { status?: string; search?: string };
-    const filter: Record<string, unknown> = {};
+    const { status, search, kind } = req.query as {
+      status?: string;
+      search?: string;
+      kind?: string;
+    };
+    const kindFilter = kind === "sectional" ? "sectional" : { $ne: "sectional" };
+    const filter: Record<string, unknown> = { kind: kindFilter };
     if (status === "published" || status === "draft") filter.status = status;
     if (search) filter.title = { $regex: search, $options: "i" };
 
     const seriesList = await TestSeries.find(filter).sort({ createdAt: -1 });
     const [all, published, draft] = await Promise.all([
-      TestSeries.countDocuments({}),
-      TestSeries.countDocuments({ status: "published" }),
-      TestSeries.countDocuments({ status: "draft" }),
+      TestSeries.countDocuments({ kind: kindFilter } as Record<string, unknown>),
+      TestSeries.countDocuments({ kind: kindFilter, status: "published" } as Record<string, unknown>),
+      TestSeries.countDocuments({ kind: kindFilter, status: "draft" } as Record<string, unknown>),
     ]);
 
     const withCounts = await Promise.all(
@@ -63,6 +69,9 @@ export const listSeries = async (req: AuthRequest, res: Response): Promise<void>
           title: s.title,
           category: s.category,
           status: s.status,
+          accessType: s.accessType,
+          price: s.price,
+          coachingPrice: s.coachingPrice,
           testCount: counts.testCount,
           totalQuestions: counts.totalQuestions,
           studentCount: counts.studentCount,
@@ -92,7 +101,7 @@ export const getSeriesDetail = async (req: AuthRequest, res: Response): Promise<
 
 export const createSeries = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, category, examTarget, description, shortDescription, bannerImage, difficulty } =
+    const { title, category, kind, examTarget, description, shortDescription, bannerImage, difficulty } =
       req.body as Record<string, string | undefined>;
 
     if (!title || !title.trim()) {
@@ -107,6 +116,7 @@ export const createSeries = async (req: AuthRequest, res: Response): Promise<voi
     const series = await TestSeries.create({
       title: title.trim(),
       category,
+      kind: kind === "sectional" ? "sectional" : "series",
       examTarget: examTarget ?? "",
       description: description ?? "",
       shortDescription: shortDescription ?? "",

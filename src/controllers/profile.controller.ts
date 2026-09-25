@@ -33,6 +33,7 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
       email: user.email,
       mobile: user.mobile,
       preferredLanguage: user.preferredLanguage,
+      profileImage: user.profileImage ?? null,
       testsAttempted,
       avgAccuracy,
       bestRank,
@@ -91,6 +92,24 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to update profile", error });
+  }
+};
+
+export const updateProfileImage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { profileImage } = req.body as { profileImage?: string | null };
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { profileImage: profileImage ?? null },
+      { new: true }
+    );
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    res.status(200).json({ profileImage: user.profileImage });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update profile photo", error });
   }
 };
 

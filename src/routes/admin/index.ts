@@ -12,6 +12,7 @@ import teacherRoutes from "./teacher.routes";
 import successStoryRoutes from "./successStory.routes";
 import pyqRoutes from "./pyq.routes";
 import ebookRoutes from "./ebook.routes";
+import socialMediaRoutes from "./socialMedia.routes";
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.use("/teacher-info", teacherRoutes);
 router.use("/success-stories", successStoryRoutes);
 router.use("/pyq", pyqRoutes);
 router.use("/ebooks", ebookRoutes);
+router.use("/social-media", socialMediaRoutes);
 
 export default router;

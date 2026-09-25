@@ -29,6 +29,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       totalTests,
       attempted,
       myActivitiesList,
+      completedAttemptsList,
       popularSeries,
       rankAgg,
       activeCategories,
@@ -40,6 +41,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       Test.countDocuments({ status: { $ne: "draft" } }),
       TestAttempt.countDocuments({ user: userId }),
       TestAttempt.find({ user: userId, status: "in-progress" }).sort({ updatedAt: -1 }),
+      TestAttempt.find({ user: userId, status: "completed" }).sort({ submittedAt: -1 }).limit(10),
       TestSeries.find(seriesFilter).sort({ createdAt: -1 }).limit(10),
       TestAttempt.aggregate([
         { $match: { status: "completed", scorePercent: { $ne: null } } },
@@ -58,6 +60,15 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       { $group: { _id: "$series", count: { $sum: 1 } } },
     ]);
     const liveTestCountMap = new Map(liveTestCounts.map((c) => [String(c._id), c.count]));
+
+    // Drop in-progress attempts whose underlying Test was deleted — resuming
+    // them would 404, so they should never surface as a "Resume Test" card.
+    const inProgressTestIds = myActivitiesList.map((a) => a.test);
+    const existingTests = await Test.find({ _id: { $in: inProgressTestIds } }).select("_id");
+    const existingTestIdSet = new Set(existingTests.map((t) => String(t._id)));
+    const validInProgressAttempts = myActivitiesList.filter((a) =>
+      existingTestIdSet.has(String(a.test))
+    );
 
     const rankIndex = rankAgg.findIndex((r) => String(r._id) === String(userId));
     const rank = rankIndex >= 0 ? rankIndex + 1 : null;
@@ -141,17 +152,39 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
         { id: "rpf_si", name: "RPF SI", code: "RPF SI" },
       ];
 
-    // My Activities (in-progress test attempts)
-    const myActivities = myActivitiesList.map((a) => ({
-      attemptId: a._id,
-      testId: a.test,
-      title: a.title,
-      categoryTag: "RRB NTPC Graduate",
-      totalQuestions: a.totalQuestions,
-      questionsCompleted: a.questionsCompleted,
-      durationMinutes: 90,
-      percent: Math.round((a.questionsCompleted / a.totalQuestions) * 100),
-    }));
+    // My Activities — in-progress attempts ("Resume Test") and recently
+    // completed attempts ("Result"), merged and sorted most-recent-first.
+    // Each attempt already stores its own title/category, so this is
+    // naturally student-wise and stays correct even if the Test doc is
+    // later deleted.
+    const recentAttempts = [...validInProgressAttempts, ...completedAttemptsList]
+      .sort((a, b) => {
+        const aTime = a.status === "completed" ? a.submittedAt : a.updatedAt;
+        const bTime = b.status === "completed" ? b.submittedAt : b.updatedAt;
+        return new Date(bTime ?? 0).getTime() - new Date(aTime ?? 0).getTime();
+      })
+      .slice(0, 10);
+
+    const myActivities = recentAttempts.map((a) => {
+      const isCompleted = a.status === "completed";
+      return {
+        attemptId: a._id,
+        testId: a.test,
+        title: a.title,
+        categoryTag: a.category || "General",
+        status: a.status,
+        totalQuestions: a.totalQuestions,
+        questionsCompleted: a.questionsCompleted,
+        durationMinutes: 90,
+        percent: isCompleted
+          ? 100
+          : a.totalQuestions > 0
+          ? Math.round((a.questionsCompleted / a.totalQuestions) * 100)
+          : 0,
+        score: isCompleted ? a.score : null,
+        accuracy: isCompleted ? a.accuracy : null,
+      };
+    });
 
     // Success Stories
     const successStories = dbSuccessStories.length > 0
@@ -192,16 +225,20 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       liveMocks,
       trendingExams,
       myActivities,
-      continueTest: myActivitiesList.length > 0
+      continueTest: validInProgressAttempts.length > 0
         ? {
-            attemptId: myActivitiesList[0]._id,
-            testId: myActivitiesList[0].test,
-            title: myActivitiesList[0].title,
-            totalQuestions: myActivitiesList[0].totalQuestions,
-            questionsCompleted: myActivitiesList[0].questionsCompleted,
-            percent: Math.round(
-              (myActivitiesList[0].questionsCompleted / myActivitiesList[0].totalQuestions) * 100
-            ),
+            attemptId: validInProgressAttempts[0]._id,
+            testId: validInProgressAttempts[0].test,
+            title: validInProgressAttempts[0].title,
+            totalQuestions: validInProgressAttempts[0].totalQuestions,
+            questionsCompleted: validInProgressAttempts[0].questionsCompleted,
+            percent: validInProgressAttempts[0].totalQuestions > 0
+              ? Math.round(
+                  (validInProgressAttempts[0].questionsCompleted /
+                    validInProgressAttempts[0].totalQuestions) *
+                    100
+                )
+              : 0,
           }
         : null,
       categories: activeCategories.map((c) => ({ name: c.name, iconImage: c.iconImage })),

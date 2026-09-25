@@ -16,8 +16,13 @@ export interface IUser extends Document {
   preferredLanguage: Language;
   role: Role;
   isCoachingStudent: boolean;
+  profileImage: string | null;
   purchasedSeries: mongoose.Types.ObjectId[];
+  purchasedPyqIds: mongoose.Types.ObjectId[];
+  purchasedEbookIds: mongoose.Types.ObjectId[];
   viewedEbookIds: mongoose.Types.ObjectId[];
+  activeSessionId: string | null;
+  activeSessionAt: Date | null;
   createdAt: Date;
 }
 
@@ -31,8 +36,13 @@ const userSchema = new Schema<IUser>({
   preferredLanguage: { type: String, enum: LANGUAGES, default: "English" },
   role: { type: String, enum: ROLES, default: "student" },
   isCoachingStudent: { type: Boolean, default: false },
+  profileImage: { type: String, default: null },
   purchasedSeries: [{ type: Schema.Types.ObjectId, ref: "TestSeries" }],
+  purchasedPyqIds: [{ type: Schema.Types.ObjectId, ref: "Pyq" }],
+  purchasedEbookIds: [{ type: Schema.Types.ObjectId, ref: "Ebook" }],
   viewedEbookIds: [{ type: Schema.Types.ObjectId, ref: "Ebook" }],
+  activeSessionId: { type: String, default: null },
+  activeSessionAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

@@ -1,5 +1,7 @@
 import { Schema, model, Document } from "mongoose";
 
+export type PyqAccessType = "free" | "paid";
+
 export interface IPyq extends Document {
   title: string;
   category: string;
@@ -7,6 +9,9 @@ export interface IPyq extends Document {
   year: number;
   fileUrl: string;
   fileSize: number;
+  accessType: PyqAccessType;
+  price: number;
+  coachingPrice: number;
   displayOrder: number;
   isActive: boolean;
   createdAt: Date;
@@ -21,6 +26,9 @@ const pyqSchema = new Schema<IPyq>(
     year: { type: Number, required: true },
     fileUrl: { type: String, required: true },
     fileSize: { type: Number, default: 0 },
+    accessType: { type: String, enum: ["free", "paid"], default: "free" },
+    price: { type: Number, default: 0 },
+    coachingPrice: { type: Number, default: 0 },
     displayOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },

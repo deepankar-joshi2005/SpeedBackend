@@ -11,6 +11,9 @@ const normalizePyq = (p: any) => ({
   year: p.year,
   fileUrl: p.fileUrl,
   fileSize: p.fileSize,
+  accessType: p.accessType,
+  price: p.price,
+  coachingPrice: p.coachingPrice,
   displayOrder: p.displayOrder,
   isActive: p.isActive,
   createdAt: p.createdAt,
@@ -32,17 +35,31 @@ export const listPyqs = async (req: AuthRequest, res: Response): Promise<void> =
 
 export const createPyq = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, category, examName, year, fileUrl, fileSize, displayOrder, isActive } =
-      req.body as {
-        title?: string;
-        category?: string;
-        examName?: string;
-        year?: number;
-        fileUrl?: string;
-        fileSize?: number;
-        displayOrder?: number;
-        isActive?: boolean;
-      };
+    const {
+      title,
+      category,
+      examName,
+      year,
+      fileUrl,
+      fileSize,
+      accessType,
+      price,
+      coachingPrice,
+      displayOrder,
+      isActive,
+    } = req.body as {
+      title?: string;
+      category?: string;
+      examName?: string;
+      year?: number;
+      fileUrl?: string;
+      fileSize?: number;
+      accessType?: "free" | "paid";
+      price?: number;
+      coachingPrice?: number;
+      displayOrder?: number;
+      isActive?: boolean;
+    };
 
     if (!title?.trim() || !category?.trim() || !examName?.trim() || !year || !fileUrl) {
       res
@@ -58,6 +75,9 @@ export const createPyq = async (req: AuthRequest, res: Response): Promise<void> 
       year: Number(year),
       fileUrl,
       fileSize: fileSize ? Number(fileSize) : 0,
+      accessType: accessType === "paid" ? "paid" : "free",
+      price: accessType === "paid" && price ? Number(price) : 0,
+      coachingPrice: accessType === "paid" && coachingPrice ? Number(coachingPrice) : 0,
       displayOrder: displayOrder ? Number(displayOrder) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
@@ -78,17 +98,31 @@ export const createPyq = async (req: AuthRequest, res: Response): Promise<void> 
 export const updatePyq = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, category, examName, year, fileUrl, fileSize, displayOrder, isActive } =
-      req.body as {
-        title?: string;
-        category?: string;
-        examName?: string;
-        year?: number;
-        fileUrl?: string;
-        fileSize?: number;
-        displayOrder?: number;
-        isActive?: boolean;
-      };
+    const {
+      title,
+      category,
+      examName,
+      year,
+      fileUrl,
+      fileSize,
+      accessType,
+      price,
+      coachingPrice,
+      displayOrder,
+      isActive,
+    } = req.body as {
+      title?: string;
+      category?: string;
+      examName?: string;
+      year?: number;
+      fileUrl?: string;
+      fileSize?: number;
+      accessType?: "free" | "paid";
+      price?: number;
+      coachingPrice?: number;
+      displayOrder?: number;
+      isActive?: boolean;
+    };
 
     const pyq = await Pyq.findById(id);
     if (!pyq) {
@@ -102,6 +136,13 @@ export const updatePyq = async (req: AuthRequest, res: Response): Promise<void> 
     if (year !== undefined) pyq.year = Number(year);
     if (fileUrl !== undefined) pyq.fileUrl = fileUrl;
     if (fileSize !== undefined) pyq.fileSize = Number(fileSize);
+    if (accessType !== undefined) pyq.accessType = accessType === "paid" ? "paid" : "free";
+    if (price !== undefined) pyq.price = Number(price);
+    if (coachingPrice !== undefined) pyq.coachingPrice = Number(coachingPrice);
+    if (pyq.accessType === "free") {
+      pyq.price = 0;
+      pyq.coachingPrice = 0;
+    }
     if (displayOrder !== undefined) pyq.displayOrder = Number(displayOrder);
     if (isActive !== undefined) pyq.isActive = Boolean(isActive);
 

@@ -3,6 +3,10 @@ import Category from "../../models/category.model";
 import TestSeries from "../../models/testSeries.model";
 import Test from "../../models/test.model";
 import TestAttempt from "../../models/testAttempt.model";
+import Question from "../../models/question.model";
+import Purchase from "../../models/purchase.model";
+import Pyq from "../../models/pyq.model";
+import Ebook from "../../models/ebook.model";
 import { AuthRequest } from "../../middleware/auth.middleware";
 
 async function countsForCategory(name: string) {
@@ -174,5 +178,39 @@ export const setCategoryStatus = async (req: AuthRequest, res: Response): Promis
     res.status(200).json(category);
   } catch (error) {
     res.status(500).json({ message: "Failed to update category status", error });
+  }
+};
+
+export const deleteCategory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      res.status(404).json({ message: "Category not found" });
+      return;
+    }
+
+    const seriesList = await TestSeries.find({ category: category.name }).select("_id");
+    const seriesIds = seriesList.map((s) => s._id);
+
+    const testsList = await Test.find({ series: { $in: seriesIds } }).select("_id");
+    const testIds = testsList.map((t) => t._id);
+
+    // Cascade: everything under this category's series/tests, plus
+    // anything else (PYQ, E-Books) tagged with this category's name.
+    await Promise.all([
+      Question.deleteMany({ test: { $in: testIds } }),
+      TestAttempt.deleteMany({ test: { $in: testIds } }),
+      Purchase.deleteMany({ testSeries: { $in: seriesIds } }),
+      Pyq.deleteMany({ category: category.name }),
+      Ebook.deleteMany({ category: category.name }),
+    ]);
+
+    await Test.deleteMany({ series: { $in: seriesIds } });
+    await TestSeries.deleteMany({ category: category.name });
+    await category.deleteOne();
+
+    res.status(200).json({ message: "Category and all related data deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete category", error });
   }
 };

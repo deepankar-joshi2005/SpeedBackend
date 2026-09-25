@@ -1,5 +1,7 @@
 import { Schema, model, Document } from "mongoose";
 
+export type EbookAccessType = "free" | "paid";
+
 export interface IEbook extends Document {
   title: string;
   category: string;
@@ -8,6 +10,9 @@ export interface IEbook extends Document {
   coverImage: string | null;
   fileUrl: string;
   fileSize: number;
+  accessType: EbookAccessType;
+  price: number;
+  coachingPrice: number;
   displayOrder: number;
   isActive: boolean;
   createdAt: Date;
@@ -23,6 +28,9 @@ const ebookSchema = new Schema<IEbook>(
     coverImage: { type: String, default: null },
     fileUrl: { type: String, required: true },
     fileSize: { type: Number, default: 0 },
+    accessType: { type: String, enum: ["free", "paid"], default: "free" },
+    price: { type: Number, default: 0 },
+    coachingPrice: { type: Number, default: 0 },
     displayOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },

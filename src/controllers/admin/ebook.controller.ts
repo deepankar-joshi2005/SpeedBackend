@@ -12,6 +12,9 @@ const normalizeEbook = (e: any) => ({
   coverImage: e.coverImage,
   fileUrl: e.fileUrl,
   fileSize: e.fileSize,
+  accessType: e.accessType,
+  price: e.price,
+  coachingPrice: e.coachingPrice,
   displayOrder: e.displayOrder,
   isActive: e.isActive,
   createdAt: e.createdAt,
@@ -32,18 +35,33 @@ export const listEbooks = async (req: AuthRequest, res: Response): Promise<void>
 
 export const createEbook = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, category, author, description, coverImage, fileUrl, fileSize, displayOrder, isActive } =
-      req.body as {
-        title?: string;
-        category?: string;
-        author?: string;
-        description?: string;
-        coverImage?: string | null;
-        fileUrl?: string;
-        fileSize?: number;
-        displayOrder?: number;
-        isActive?: boolean;
-      };
+    const {
+      title,
+      category,
+      author,
+      description,
+      coverImage,
+      fileUrl,
+      fileSize,
+      accessType,
+      price,
+      coachingPrice,
+      displayOrder,
+      isActive,
+    } = req.body as {
+      title?: string;
+      category?: string;
+      author?: string;
+      description?: string;
+      coverImage?: string | null;
+      fileUrl?: string;
+      fileSize?: number;
+      accessType?: "free" | "paid";
+      price?: number;
+      coachingPrice?: number;
+      displayOrder?: number;
+      isActive?: boolean;
+    };
 
     if (!title?.trim() || !category?.trim() || !fileUrl) {
       res.status(400).json({ message: "Title, category and PDF file are required" });
@@ -58,6 +76,9 @@ export const createEbook = async (req: AuthRequest, res: Response): Promise<void
       coverImage: coverImage ?? null,
       fileUrl,
       fileSize: fileSize ? Number(fileSize) : 0,
+      accessType: accessType === "paid" ? "paid" : "free",
+      price: accessType === "paid" && price ? Number(price) : 0,
+      coachingPrice: accessType === "paid" && coachingPrice ? Number(coachingPrice) : 0,
       displayOrder: displayOrder ? Number(displayOrder) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
@@ -78,18 +99,33 @@ export const createEbook = async (req: AuthRequest, res: Response): Promise<void
 export const updateEbook = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, category, author, description, coverImage, fileUrl, fileSize, displayOrder, isActive } =
-      req.body as {
-        title?: string;
-        category?: string;
-        author?: string;
-        description?: string;
-        coverImage?: string | null;
-        fileUrl?: string;
-        fileSize?: number;
-        displayOrder?: number;
-        isActive?: boolean;
-      };
+    const {
+      title,
+      category,
+      author,
+      description,
+      coverImage,
+      fileUrl,
+      fileSize,
+      accessType,
+      price,
+      coachingPrice,
+      displayOrder,
+      isActive,
+    } = req.body as {
+      title?: string;
+      category?: string;
+      author?: string;
+      description?: string;
+      coverImage?: string | null;
+      fileUrl?: string;
+      fileSize?: number;
+      accessType?: "free" | "paid";
+      price?: number;
+      coachingPrice?: number;
+      displayOrder?: number;
+      isActive?: boolean;
+    };
 
     const ebook = await Ebook.findById(id);
     if (!ebook) {
@@ -104,6 +140,13 @@ export const updateEbook = async (req: AuthRequest, res: Response): Promise<void
     if (coverImage !== undefined) ebook.coverImage = coverImage;
     if (fileUrl !== undefined) ebook.fileUrl = fileUrl;
     if (fileSize !== undefined) ebook.fileSize = Number(fileSize);
+    if (accessType !== undefined) ebook.accessType = accessType === "paid" ? "paid" : "free";
+    if (price !== undefined) ebook.price = Number(price);
+    if (coachingPrice !== undefined) ebook.coachingPrice = Number(coachingPrice);
+    if (ebook.accessType === "free") {
+      ebook.price = 0;
+      ebook.coachingPrice = 0;
+    }
     if (displayOrder !== undefined) ebook.displayOrder = Number(displayOrder);
     if (isActive !== undefined) ebook.isActive = Boolean(isActive);
 

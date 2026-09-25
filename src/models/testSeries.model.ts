@@ -2,10 +2,12 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export type AccessType = "free" | "paid";
 export type SeriesStatus = "draft" | "published";
+export type SeriesKind = "series" | "sectional";
 
 export interface ITestSeries extends Document {
   title: string;
   category: string;
+  kind: SeriesKind;
   examTarget: string;
   description: string;
   shortDescription: string;
@@ -32,6 +34,7 @@ export interface ITestSeries extends Document {
 const testSeriesSchema = new Schema<ITestSeries>({
   title: { type: String, required: true, trim: true },
   category: { type: String, required: true, trim: true, index: true },
+  kind: { type: String, enum: ["series", "sectional"], default: "series", index: true },
   examTarget: { type: String, default: "", trim: true },
   description: { type: String, default: "" },
   shortDescription: { type: String, default: "" },
