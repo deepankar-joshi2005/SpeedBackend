@@ -137,7 +137,7 @@ export const getSectionalSeriesTests = async (req: AuthRequest, res: Response): 
           maxAttempts: t.maxAttempts,
           attemptsUsed,
           canReattempt,
-          isFreeDemo: idx < freeDemoCount || !!t.isFreeDemo,
+          isFreeDemo: !isSeriesPaid || !!t.isFreeDemo || idx < freeDemoCount,
           isLocked,
         };
       }),

@@ -3,6 +3,7 @@ import {
   startAttempt,
   saveAnswer,
   submitAttempt,
+  submitSection,
   getResult,
   getSolutions,
   getHistory,
@@ -15,6 +16,7 @@ router.post("/start", requireAuth, startAttempt);
 router.get("/history", requireAuth, getHistory);
 router.patch("/:attemptId/answer", requireAuth, saveAnswer);
 router.post("/:attemptId/submit", requireAuth, submitAttempt);
+router.post("/:attemptId/section/submit", requireAuth, submitSection);
 router.get("/:attemptId/result", requireAuth, getResult);
 router.get("/:attemptId/solutions", requireAuth, getSolutions);
 

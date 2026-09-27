@@ -115,7 +115,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       { targetScreen: "adminStudentDetail" }
     );
 
-    await claimSession(user);
     const token = signToken(String(user._id), user.role);
     res.status(201).json({ user: toPublicUser(user), token });
   } catch (error) {

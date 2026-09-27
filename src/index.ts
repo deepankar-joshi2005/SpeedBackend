@@ -20,6 +20,7 @@ import sectionalRoutes from "./routes/sectional.routes";
 import socialMediaRoutes from "./routes/socialMedia.routes";
 import uploadRoutes from "./routes/upload.routes";
 import adminRoutes from "./routes/admin";
+import upcomingMockRoutes from "./routes/upcomingMock.routes";
 import { verifySignedPath } from "./utils/signedUrl";
 
 dotenv.config();
@@ -75,6 +76,7 @@ app.use("/api/sectional", sectionalRoutes);
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/upcoming-mocks", upcomingMockRoutes);
 
 connectDB().then(() => {
   app.listen(PORT, () => {

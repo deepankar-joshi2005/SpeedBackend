@@ -215,6 +215,13 @@ export const getTestInstructions = async (req: AuthRequest, res: Response): Prom
     }
     const series = await TestSeries.findById(test.series);
 
+    const orderedSections =
+      test.divideSectionsByTime && test.sectionOrder.length === test.subjectSections.length
+        ? (test.sectionOrder
+            .map((name) => test.subjectSections.find((s) => s.name === name))
+            .filter(Boolean) as typeof test.subjectSections)
+        : test.subjectSections;
+
     res.status(200).json({
       id: test._id,
       title: test.title,
@@ -224,6 +231,8 @@ export const getTestInstructions = async (req: AuthRequest, res: Response): Prom
       totalMarks: test.totalMarks,
       durationMinutes: test.durationMinutes,
       negativeMarks: test.negativeMarks,
+      subjectSections: orderedSections,
+      divideSectionsByTime: test.divideSectionsByTime,
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to load test instructions", error });

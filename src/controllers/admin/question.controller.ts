@@ -406,14 +406,30 @@ export const importQuestions = async (req: AuthRequest, res: Response): Promise<
       const correctOptionIndex = ["A", "B", "C", "D"].indexOf(correctAnswerRaw);
       const marks = Number(row["Marks"]) || 2;
 
+      // Hindi columns are optional. Only store them if the question text and
+      // all four options are present — a partial Hindi set would break the
+      // student-side language toggle, which expects all-or-nothing.
+      const questionHindi = row["Question Hindi"]?.trim() || "";
+      const optionAHindi = row["Option A Hindi"]?.trim() || "";
+      const optionBHindi = row["Option B Hindi"]?.trim() || "";
+      const optionCHindi = row["Option C Hindi"]?.trim() || "";
+      const optionDHindi = row["Option D Hindi"]?.trim() || "";
+      const hasFullHindiSet =
+        !!questionHindi && !!optionAHindi && !!optionBHindi && !!optionCHindi && !!optionDHindi;
+
       validDocs.push({
         test: testId,
         subject: row["Subject"]?.trim() || "General",
         topic: row["Topic"]?.trim() || "",
         text: question,
+        textHindi: hasFullHindiSet ? questionHindi : "",
         options: [optionA, optionB, optionC, optionD],
+        optionsHindi: hasFullHindiSet
+          ? [optionAHindi, optionBHindi, optionCHindi, optionDHindi]
+          : [],
         correctOptionIndex,
         explanation: row["Explanation"]?.trim() || "",
+        explanationHindi: row["Explanation Hindi"]?.trim() || "",
         marks,
         negativeMarks: 0.25,
       });

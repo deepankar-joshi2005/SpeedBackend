@@ -8,6 +8,7 @@ export interface ISubjectSection {
   name: string;
   startNo: number;
   endNo: number;
+  durationMinutes?: number;
 }
 
 export interface ITest extends Document {
@@ -28,6 +29,8 @@ export interface ITest extends Document {
   status: TestStatus;
   order: number;
   subjectSections: ISubjectSection[];
+  divideSectionsByTime: boolean;
+  sectionOrder: string[];
   accessLevel: TestAccessLevel;
   isFreeDemo: boolean;
   createdAt: Date;
@@ -38,6 +41,7 @@ const subjectSectionSchema = new Schema<ISubjectSection>(
     name: { type: String, required: true, trim: true },
     startNo: { type: Number, required: true },
     endNo: { type: Number, required: true },
+    durationMinutes: { type: Number },
   },
   { _id: false }
 );
@@ -60,6 +64,8 @@ const testSchema = new Schema<ITest>({
   status: { type: String, enum: ["draft", "published"], default: "draft" },
   order: { type: Number, default: 0 },
   subjectSections: { type: [subjectSectionSchema], default: [] },
+  divideSectionsByTime: { type: Boolean, default: false },
+  sectionOrder: { type: [String], default: [] },
   accessLevel: { type: String, enum: ["all", "coachingOnly"], default: "coachingOnly" },
   isFreeDemo: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },

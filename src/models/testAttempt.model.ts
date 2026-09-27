@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
 export type AttemptStatus = "in-progress" | "completed";
+export type SectionProgressStatus = "pending" | "active" | "submitted";
 
 export interface IAnswer {
   question: Types.ObjectId;
@@ -26,6 +27,16 @@ export interface ISectionBreakdown {
   timeSpentSeconds: number;
 }
 
+export interface ISectionProgress {
+  name: string;
+  startNo: number;
+  endNo: number;
+  durationSeconds: number | null;
+  status: SectionProgressStatus;
+  startedAt: Date | null;
+  submittedAt: Date | null;
+}
+
 export interface ITestAttempt extends Document {
   user: Types.ObjectId;
   test: Types.ObjectId;
@@ -49,6 +60,9 @@ export interface ITestAttempt extends Document {
   topScore: number | null;
   subjectBreakdown: ISubjectBreakdown[];
   sectionBreakdown: ISectionBreakdown[];
+  divideSectionsByTime: boolean;
+  sectionProgress: ISectionProgress[];
+  activeSectionName: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,6 +100,19 @@ const sectionBreakdownSchema = new Schema<ISectionBreakdown>(
   { _id: false }
 );
 
+const sectionProgressSchema = new Schema<ISectionProgress>(
+  {
+    name: { type: String, required: true },
+    startNo: { type: Number, required: true },
+    endNo: { type: Number, required: true },
+    durationSeconds: { type: Number, default: null },
+    status: { type: String, enum: ["pending", "active", "submitted"], default: "pending" },
+    startedAt: { type: Date, default: null },
+    submittedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const testAttemptSchema = new Schema<ITestAttempt>({
   user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
   test: { type: Schema.Types.ObjectId, ref: "Test", required: true, index: true },
@@ -109,6 +136,9 @@ const testAttemptSchema = new Schema<ITestAttempt>({
   topScore: { type: Number, default: null },
   subjectBreakdown: { type: [subjectBreakdownSchema], default: [] },
   sectionBreakdown: { type: [sectionBreakdownSchema], default: [] },
+  divideSectionsByTime: { type: Boolean, default: false },
+  sectionProgress: { type: [sectionProgressSchema], default: [] },
+  activeSectionName: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

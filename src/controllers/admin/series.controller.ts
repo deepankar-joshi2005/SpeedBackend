@@ -139,6 +139,9 @@ export const updateSeries = async (req: AuthRequest, res: Response): Promise<voi
       res.status(404).json({ message: "Test series not found" });
       return;
     }
+    if (series.accessType === "free") {
+      await Test.updateMany({ series: series._id }, { isFreeDemo: true });
+    }
     res.status(200).json(series);
   } catch (error) {
     res.status(500).json({ message: "Failed to update test series", error });

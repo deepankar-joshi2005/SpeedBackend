@@ -21,6 +21,7 @@ const CONFIG_FIELDS = [
   "startDate",
   "endDate",
   "accessLevel",
+  "isFreeDemo",
 ] as const;
 
 export const listAllTests = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -56,9 +57,9 @@ export const listAllTests = async (req: AuthRequest, res: Response): Promise<voi
 
 export const createTest = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, series, subject, description, difficulty, status } = req.body as Record<
+    const { title, series, subject, description, difficulty, status, isFreeDemo } = req.body as Record<
       string,
-      string | undefined
+      any
     >;
 
     if (!title || !title.trim()) {
@@ -70,6 +71,10 @@ export const createTest = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    const seriesDoc = await TestSeries.findById(series);
+    const isSeriesFree = seriesDoc?.accessType === "free";
+    const finalIsFreeDemo = isSeriesFree ? true : Boolean(isFreeDemo);
+
     const testStatus = status === "published" ? "published" : "draft";
     const order = await Test.countDocuments({ series });
     const test = await Test.create({
@@ -80,10 +85,10 @@ export const createTest = async (req: AuthRequest, res: Response): Promise<void>
       difficulty: difficulty ?? "Mixed",
       status: testStatus,
       order,
+      isFreeDemo: finalIsFreeDemo,
     });
 
     if (testStatus === "published") {
-      const seriesDoc = await TestSeries.findById(series);
       await notifyAllStudents(
         "New Test Added",
         `${test.title}${seriesDoc ? ` in ${seriesDoc.title}` : ""} is now available. Attempt it now!`,
@@ -110,6 +115,29 @@ export const updateTestConfig = async (req: AuthRequest, res: Response): Promise
     }
 
     const oldTest = await Test.findById(req.params.id);
+    if (!oldTest) {
+      res.status(404).json({ message: "Test not found" });
+      return;
+    }
+
+    if (body.durationMinutes !== undefined && oldTest.divideSectionsByTime) {
+      const sumMinutes = oldTest.subjectSections.reduce(
+        (sum, section) => sum + (section.durationMinutes || 0),
+        0
+      );
+      if (Number(body.durationMinutes) !== sumMinutes) {
+        res.status(400).json({
+          message: `Cannot change total duration to ${body.durationMinutes} minute(s) — the sections are configured to add up to ${sumMinutes} minute(s). Update the section durations on the Subject Sections screen first.`,
+        });
+        return;
+      }
+    }
+
+    const seriesDoc = await TestSeries.findById(oldTest.series);
+    if (seriesDoc?.accessType === "free") {
+      update.isFreeDemo = true;
+    }
+
     const test = await Test.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!test) {
       res.status(404).json({ message: "Test not found" });
@@ -117,12 +145,11 @@ export const updateTestConfig = async (req: AuthRequest, res: Response): Promise
     }
 
     if (oldTest?.status !== "published" && test.status === "published") {
-      const series = await TestSeries.findById(test.series);
       await notifyAllStudents(
         "New Test Added",
-        `${test.title}${series ? ` in ${series.title}` : ""} is now available. Attempt it now!`,
+        `${test.title}${seriesDoc ? ` in ${seriesDoc.title}` : ""} is now available. Attempt it now!`,
         "system",
-        { testId: test._id, category: series?.category, targetScreen: "testInstructions" }
+        { testId: test._id, category: seriesDoc?.category, targetScreen: "testInstructions" }
       );
     }
 
@@ -215,13 +242,22 @@ export const setSubjectSections = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { enabled, sections } = req.body as {
+    const { enabled, sections, divideSectionsByTime, sectionOrder } = req.body as {
       enabled?: boolean;
-      sections?: { name?: string; startNo?: number | string; endNo?: number | string }[];
+      sections?: {
+        name?: string;
+        startNo?: number | string;
+        endNo?: number | string;
+        durationMinutes?: number | string;
+      }[];
+      divideSectionsByTime?: boolean;
+      sectionOrder?: string[];
     };
 
     if (!enabled) {
       test.subjectSections = [];
+      test.divideSectionsByTime = false;
+      test.sectionOrder = [];
       await test.save();
       res.status(200).json(test);
       return;
@@ -241,7 +277,7 @@ export const setSubjectSections = async (req: AuthRequest, res: Response): Promi
     }
 
     let expectedStart = 1;
-    const cleanSections: { name: string; startNo: number; endNo: number }[] = [];
+    const cleanSections: { name: string; startNo: number; endNo: number; durationMinutes?: number }[] = [];
 
     for (let i = 0; i < sections.length; i++) {
       const raw = sections[i];
@@ -249,6 +285,7 @@ export const setSubjectSections = async (req: AuthRequest, res: Response): Promi
       const name = raw?.name?.trim();
       const startNo = Number(raw?.startNo);
       const endNo = Number(raw?.endNo);
+      const rawDuration = Number(raw?.durationMinutes);
 
       if (!name) {
         res.status(400).json({ message: `Section ${position}: Subject name is required.` });
@@ -279,7 +316,12 @@ export const setSubjectSections = async (req: AuthRequest, res: Response): Promi
         return;
       }
 
-      cleanSections.push({ name, startNo, endNo });
+      cleanSections.push({
+        name,
+        startNo,
+        endNo,
+        durationMinutes: Number.isFinite(rawDuration) ? rawDuration : undefined,
+      });
       expectedStart = endNo + 1;
     }
 
@@ -290,7 +332,49 @@ export const setSubjectSections = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    if (divideSectionsByTime) {
+      let sumMinutes = 0;
+      for (let i = 0; i < cleanSections.length; i++) {
+        const section = cleanSections[i];
+        if (!Number.isInteger(section.durationMinutes) || (section.durationMinutes as number) <= 0) {
+          res.status(400).json({
+            message: `Section ${i + 1} (${section.name}): Enter a duration in minutes for this section.`,
+          });
+          return;
+        }
+        sumMinutes += section.durationMinutes as number;
+      }
+
+      if (sumMinutes !== test.durationMinutes) {
+        const diff = test.durationMinutes - sumMinutes;
+        res.status(400).json({
+          message: `Section durations add up to ${sumMinutes} minute(s), but this test's total duration is ${test.durationMinutes} minute(s). ${
+            diff > 0
+              ? `Add ${diff} more minute(s) to the sections.`
+              : `Remove ${-diff} minute(s) from the sections.`
+          }`,
+        });
+        return;
+      }
+
+      const names = cleanSections.map((s) => s.name);
+      const validOrder =
+        Array.isArray(sectionOrder) &&
+        sectionOrder.length === names.length &&
+        names.every((n) => sectionOrder.includes(n)) &&
+        new Set(sectionOrder).size === sectionOrder.length;
+
+      if (!validOrder) {
+        res.status(400).json({
+          message: "Choose the order in which students will see the sections.",
+        });
+        return;
+      }
+    }
+
     test.subjectSections = cleanSections;
+    test.divideSectionsByTime = !!divideSectionsByTime;
+    test.sectionOrder = divideSectionsByTime ? (sectionOrder as string[]) : [];
     await test.save();
     res.status(200).json(test);
   } catch (error) {
