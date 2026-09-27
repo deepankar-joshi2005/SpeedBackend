@@ -17,7 +17,6 @@ const imageStorage = multer.diskStorage({
 
 export const uploadImage = multer({
   storage: imageStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) {
       cb(new Error("Only image files are allowed"));
@@ -29,7 +28,6 @@ export const uploadImage = multer({
 
 export const uploadImport = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = [
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -74,7 +72,6 @@ export const uploadPyqPdf = multer({
     destination: (_req, _file, cb) => cb(null, PYQ_DIR),
     filename: pdfFilename,
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: pdfFileFilter,
 });
 
@@ -83,6 +80,5 @@ export const uploadEbookPdf = multer({
     destination: (_req, _file, cb) => cb(null, EBOOK_DIR),
     filename: pdfFilename,
   }),
-  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: pdfFileFilter,
 });
