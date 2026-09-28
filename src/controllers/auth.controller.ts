@@ -160,6 +160,52 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, newPassword, confirmPassword } = req.body as {
+      email?: string;
+      newPassword?: string;
+      confirmPassword?: string;
+    };
+
+    if (!email || !isValidEmail(email)) {
+      res.status(400).json({ message: "Enter a valid email address" });
+      return;
+    }
+    if (!newPassword || !confirmPassword) {
+      res.status(400).json({ message: "New password and confirm password are required" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      res.status(400).json({ message: "New password and confirm password do not match" });
+      return;
+    }
+    if (!isStrongPassword(newPassword)) {
+      res.status(400).json({
+        message:
+          "Password must be at least 6 characters and include an uppercase letter, a lowercase letter, and a number",
+      });
+      return;
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      res.status(404).json({ message: "No account found with this email address" });
+      return;
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    // Force all sessions to expire after password reset
+    user.activeSessionId = null as any;
+    user.activeSessionAt = null as any;
+    await user.save();
+
+    res.status(200).json({ message: "Password updated successfully. Please login with your new password." });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to reset password", error });
+  }
+};
+
 export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     await User.findByIdAndUpdate(req.userId, {
