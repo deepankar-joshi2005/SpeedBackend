@@ -13,6 +13,7 @@ export interface IQuestion extends Document {
   image: string | null;
   options: string[];
   optionsHindi: string[];
+  optionImages: (string | null)[];
   correctOptionIndex: number;
   explanation: string;
   explanationHindi: string;
@@ -37,6 +38,11 @@ const questionSchema = new Schema<IQuestion>({
     type: [String],
     default: [],
     validate: (v: string[]) => v.length === 0 || v.length === 4,
+  },
+  optionImages: {
+    type: [String],
+    default: [],
+    validate: (v: (string | null)[]) => v.length === 0 || v.length === 4,
   },
   correctOptionIndex: { type: Number, required: true, min: 0, max: 3 },
   explanation: { type: String, default: "" },

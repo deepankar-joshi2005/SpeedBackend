@@ -355,6 +355,7 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
         image: q.image || null,
         options: q.options,
         optionsHindi: q.optionsHindi && q.optionsHindi.length === 4 ? q.optionsHindi : null,
+        optionImages: q.optionImages && q.optionImages.length === 4 ? q.optionImages : null,
         order: q.order,
       })),
       answers: attempt.answers.map((a) => ({
@@ -635,6 +636,7 @@ export const getSolutions = async (req: AuthRequest, res: Response): Promise<voi
           image: q.image || null,
           options: q.options,
           optionsHindi: q.optionsHindi && q.optionsHindi.length === 4 ? q.optionsHindi : null,
+          optionImages: q.optionImages && q.optionImages.length === 4 ? q.optionImages : null,
           correctOptionIndex: q.correctOptionIndex,
           explanation: q.explanation,
           explanationHindi: q.explanationHindi || null,

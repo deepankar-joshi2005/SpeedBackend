@@ -93,6 +93,7 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       image,
       options,
       optionsHindi,
+      optionImages,
       correctOptionIndex,
       explanation,
       explanationHindi,
@@ -109,6 +110,7 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       image?: string;
       options?: string[];
       optionsHindi?: string[];
+      optionImages?: (string | null)[];
       correctOptionIndex?: number;
       explanation?: string;
       explanationHindi?: string;
@@ -126,8 +128,18 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       res.status(400).json({ message: "Subject is required" });
       return;
     }
-    if (!Array.isArray(options) || options.length !== 4 || options.some((o) => !o?.trim())) {
+    if (!Array.isArray(options) || options.length !== 4) {
       res.status(400).json({ message: "All four options are required" });
+      return;
+    }
+
+    const normalizedOptionImages: (string | null)[] =
+      Array.isArray(optionImages) && optionImages.length === 4
+        ? optionImages.map((img) => img || null)
+        : [null, null, null, null];
+
+    if (options.some((o, i) => !o?.trim() && !normalizedOptionImages[i])) {
+      res.status(400).json({ message: "Each option needs text, an image, or both" });
       return;
     }
     if (
@@ -156,8 +168,9 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       text: text?.trim() ?? "",
       textHindi: textHindi?.trim() ?? "",
       image: image ?? null,
-      options,
+      options: options.map((o) => o?.trim() ?? ""),
       optionsHindi: optionsHindi ?? [],
+      optionImages: normalizedOptionImages.some((img) => img) ? normalizedOptionImages : [],
       correctOptionIndex,
       explanation: explanation ?? "",
       explanationHindi: explanationHindi ?? "",
@@ -186,6 +199,7 @@ export const updateQuestion = async (req: AuthRequest, res: Response): Promise<v
       "image",
       "options",
       "optionsHindi",
+      "optionImages",
       "correctOptionIndex",
       "explanation",
       "explanationHindi",
@@ -254,6 +268,7 @@ export const addToTest = async (req: AuthRequest, res: Response): Promise<void> 
       image: source.image,
       options: source.options,
       optionsHindi: source.optionsHindi,
+      optionImages: source.optionImages,
       correctOptionIndex: source.correctOptionIndex,
       explanation: source.explanation,
       explanationHindi: source.explanationHindi,
@@ -305,6 +320,7 @@ export const bulkAddToTest = async (req: AuthRequest, res: Response): Promise<vo
         image: source.image,
         options: source.options,
         optionsHindi: source.optionsHindi,
+        optionImages: source.optionImages,
         correctOptionIndex: source.correctOptionIndex,
         explanation: source.explanation,
         explanationHindi: source.explanationHindi,
