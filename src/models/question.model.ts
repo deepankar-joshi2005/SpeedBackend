@@ -16,6 +16,7 @@ export interface IQuestion extends Document {
   correctOptionIndex: number;
   explanation: string;
   explanationHindi: string;
+  explanationImage: string | null;
   difficulty: QuestionDifficulty;
   marks: number;
   negativeMarks: number;
@@ -28,7 +29,7 @@ const questionSchema = new Schema<IQuestion>({
   bankId: { type: Schema.Types.ObjectId, index: true },
   subject: { type: String, required: true, trim: true },
   topic: { type: String, default: "", trim: true },
-  text: { type: String, required: true, trim: true },
+  text: { type: String, default: "", trim: true },
   textHindi: { type: String, default: "", trim: true },
   image: { type: String, default: null },
   options: { type: [String], required: true, validate: (v: string[]) => v.length === 4 },
@@ -40,6 +41,7 @@ const questionSchema = new Schema<IQuestion>({
   correctOptionIndex: { type: Number, required: true, min: 0, max: 3 },
   explanation: { type: String, default: "" },
   explanationHindi: { type: String, default: "" },
+  explanationImage: { type: String, default: null },
   difficulty: { type: String, enum: DIFFICULTIES, default: "Moderate" },
   marks: { type: Number, default: 2 },
   negativeMarks: { type: Number, default: 0.25 },

@@ -194,6 +194,16 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // Admin passwords can never be reset through the public "forgot password"
+    // flow — an admin must use Change Password from inside the admin panel,
+    // which requires the current password.
+    if (user.role === "admin") {
+      res.status(403).json({
+        message: "Password reset is not available for admin accounts here. Please contact support.",
+      });
+      return;
+    }
+
     user.password = await bcrypt.hash(newPassword, 10);
     // Force all sessions to expire after password reset
     user.activeSessionId = null as any;
@@ -203,6 +213,55 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     res.status(200).json({ message: "Password updated successfully. Please login with your new password." });
   } catch (error) {
     res.status(500).json({ message: "Failed to reset password", error });
+  }
+};
+
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body as {
+      currentPassword?: string;
+      newPassword?: string;
+      confirmPassword?: string;
+    };
+
+    if (!currentPassword) {
+      res.status(400).json({ message: "Current password is required" });
+      return;
+    }
+    if (!newPassword || !confirmPassword) {
+      res.status(400).json({ message: "New password and confirm password are required" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      res.status(400).json({ message: "New password and confirm password do not match" });
+      return;
+    }
+    if (!isStrongPassword(newPassword)) {
+      res.status(400).json({
+        message:
+          "Password must be at least 6 characters and include an uppercase letter, a lowercase letter, and a number",
+      });
+      return;
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const currentMatches = await bcrypt.compare(currentPassword, user.password);
+    if (!currentMatches) {
+      res.status(401).json({ message: "Current password is incorrect" });
+      return;
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.status(200).json({ message: "Password changed successfully." });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to change password", error });
   }
 };
 

@@ -96,6 +96,7 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       correctOptionIndex,
       explanation,
       explanationHindi,
+      explanationImage,
       difficulty,
       marks,
       negativeMarks,
@@ -111,13 +112,14 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       correctOptionIndex?: number;
       explanation?: string;
       explanationHindi?: string;
+      explanationImage?: string;
       difficulty?: string;
       marks?: number;
       negativeMarks?: number;
     };
 
-    if (!text || !text.trim()) {
-      res.status(400).json({ message: "Question text is required" });
+    if ((!text || !text.trim()) && !image) {
+      res.status(400).json({ message: "Add a question text or a question image" });
       return;
     }
     if (!subject || !subject.trim()) {
@@ -151,7 +153,7 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       test: testId || null,
       subject: subject.trim(),
       topic: topic ?? "",
-      text: text.trim(),
+      text: text?.trim() ?? "",
       textHindi: textHindi?.trim() ?? "",
       image: image ?? null,
       options,
@@ -159,6 +161,7 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
       correctOptionIndex,
       explanation: explanation ?? "",
       explanationHindi: explanationHindi ?? "",
+      explanationImage: explanationImage ?? null,
       difficulty: (difficulty as QuestionDifficulty) ?? "Moderate",
       marks: marks ?? 2,
       negativeMarks: negativeMarks ?? 0.25,
@@ -186,6 +189,7 @@ export const updateQuestion = async (req: AuthRequest, res: Response): Promise<v
       "correctOptionIndex",
       "explanation",
       "explanationHindi",
+      "explanationImage",
       "difficulty",
       "marks",
       "negativeMarks",
@@ -253,6 +257,7 @@ export const addToTest = async (req: AuthRequest, res: Response): Promise<void> 
       correctOptionIndex: source.correctOptionIndex,
       explanation: source.explanation,
       explanationHindi: source.explanationHindi,
+      explanationImage: source.explanationImage,
       difficulty: source.difficulty,
       marks: marks ?? source.marks,
       negativeMarks: source.negativeMarks,
@@ -303,6 +308,7 @@ export const bulkAddToTest = async (req: AuthRequest, res: Response): Promise<vo
         correctOptionIndex: source.correctOptionIndex,
         explanation: source.explanation,
         explanationHindi: source.explanationHindi,
+        explanationImage: source.explanationImage,
         difficulty: source.difficulty,
         marks: source.marks,
         negativeMarks: source.negativeMarks,

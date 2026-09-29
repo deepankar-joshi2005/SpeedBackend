@@ -638,6 +638,7 @@ export const getSolutions = async (req: AuthRequest, res: Response): Promise<voi
           correctOptionIndex: q.correctOptionIndex,
           explanation: q.explanation,
           explanationHindi: q.explanationHindi || null,
+          explanationImage: q.explanationImage || null,
           selectedOption: answer?.selectedOption ?? null,
           isCorrect: answer?.isCorrect ?? null,
         };
