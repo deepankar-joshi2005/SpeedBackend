@@ -114,7 +114,7 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
 export const getTestsByCategory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId as string;
-    const category = req.params.category;
+    const category = String(req.params.category);
 
     const userDoc = await mongoose.model("User").findById(userId);
     const purchasedSeriesIds = new Set((userDoc?.purchasedSeries || []).map((id: any) => String(id)));
