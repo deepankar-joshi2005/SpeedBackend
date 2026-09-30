@@ -8,6 +8,21 @@ import Banner from "../models/banner.model";
 import TeacherInfo from "../models/teacherInfo.model";
 import SuccessStory from "../models/successStory.model";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { calculateStreak } from "../utils/streak";
+
+export const getStreak = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId as string;
+    const completedAttempts = await TestAttempt.find(
+      { user: userId, status: "completed" },
+      { submittedAt: 1 }
+    );
+    const streakDays = calculateStreak(completedAttempts.map((a) => a.submittedAt));
+    res.status(200).json({ streakDays });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load streak", error });
+  }
+};
 
 export const getDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -73,6 +88,10 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
     const rankIndex = rankAgg.findIndex((r) => String(r._id) === String(userId));
     const rank = rankIndex >= 0 ? rankIndex + 1 : null;
     const avgScore = rankIndex >= 0 ? Math.round(rankAgg[rankIndex].avgScore) : 0;
+
+    // Calculate real streak from completed attempt dates
+    const allCompletedDates = completedAttemptsList.map((a) => a.submittedAt);
+    const streakDays = calculateStreak(allCompletedDates);
 
     // Default banners if none configured in DB
     const banners = dbBanners.length > 0
@@ -219,6 +238,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
         attempted,
         avgScore,
         rank,
+        streakDays,
       },
       banners,
       teacherInfo,

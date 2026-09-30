@@ -4,9 +4,11 @@ import User from "../models/user.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { signPath } from "../utils/signedUrl";
 
+import Category from "../models/category.model";
+
 export const listPyqsForStudent = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [pyqs, user] = await Promise.all([
+    const [pyqs, user, categories] = await Promise.all([
       Pyq.find({ isActive: true }).sort({
         category: 1,
         examName: 1,
@@ -14,8 +16,10 @@ export const listPyqsForStudent = async (req: AuthRequest, res: Response): Promi
         displayOrder: 1,
       }),
       User.findById(req.userId, "purchasedPyqIds isCoachingStudent"),
+      Category.find({ isActive: true }),
     ]);
 
+    const categoryMap = new Map(categories.map((c) => [c.name, c.iconImage]));
     const purchasedSet = new Set((user?.purchasedPyqIds ?? []).map((id) => String(id)));
 
     res.status(200).json(
@@ -26,6 +30,7 @@ export const listPyqsForStudent = async (req: AuthRequest, res: Response): Promi
           id: String(p._id),
           title: p.title,
           category: p.category,
+          categoryIcon: categoryMap.get(p.category) || null,
           examName: p.examName,
           year: p.year,
           fileUrl: isLocked ? null : signPath(p.fileUrl),

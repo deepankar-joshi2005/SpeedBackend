@@ -5,6 +5,7 @@ import Category from "../models/category.model";
 import Test from "../models/test.model";
 import TestAttempt from "../models/testAttempt.model";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { calculateStreak } from "../utils/streak";
 
 export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -118,14 +119,14 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
     const userDoc = await mongoose.model("User").findById(userId);
     const purchasedSeriesIds = new Set((userDoc?.purchasedSeries || []).map((id: any) => String(id)));
 
-    const categoryDoc = await Category.findOne({ name: category, isActive: true });
+    const safeCategoryRegex = new RegExp(`^${category.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, "i");
+    let categoryDoc = await Category.findOne({ name: { $regex: safeCategoryRegex }, isActive: true });
     if (!categoryDoc) {
-      res.status(400).json({ message: "Unknown category" });
-      return;
+      categoryDoc = await Category.findOne({ name: { $regex: safeCategoryRegex } });
     }
 
     const seriesList = await TestSeries.find({
-      category,
+      category: { $regex: safeCategoryRegex },
       isAvailable: true,
       status: { $ne: "draft" },
     });
@@ -145,15 +146,35 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
       test: { $in: tests.map((t) => t._id) },
     });
     const attemptsByTest = new Map<string, typeof attempts>();
+    let totalUserAttempts = 0;
+    let completedMocksCount = 0;
+
     for (const a of attempts) {
       const key = String(a.test);
       const arr = attemptsByTest.get(key) ?? [];
       arr.push(a);
       attemptsByTest.set(key, arr);
+      if (a.status === "completed") {
+        totalUserAttempts++;
+      }
     }
+    for (const [, arr] of attemptsByTest) {
+      if (arr.some((a) => a.status === "completed")) {
+        completedMocksCount++;
+      }
+    }
+
+    // Global attempted count across all users per test
+    const testIds = tests.map((t) => t._id);
+    const globalAttemptsAgg = await TestAttempt.aggregate([
+      { $match: { test: { $in: testIds }, status: "completed" } },
+      { $group: { _id: "$test", count: { $sum: 1 } } },
+    ]);
+    const globalAttemptsMap = new Map(globalAttemptsAgg.map((g) => [String(g._id), g.count]));
 
     res.status(200).json({
       category,
+      categoryIcon: categoryDoc?.iconImage || series?.bannerImage || null,
       seriesId: series ? String(series._id) : null,
       seriesTitle: series?.title ?? `${category} Mock Tests`,
       bannerImage: series?.bannerImage ?? null,
@@ -162,6 +183,11 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
       coachingPrice: series?.coachingPrice ?? 0,
       isPurchased: isSeriesPurchased,
       isCoachingStudent: !!userDoc?.isCoachingStudent,
+      userStats: {
+        streakDays: calculateStreak(attempts.filter(a => a.status === "completed").map(a => a.submittedAt)),
+        mocksTaken: completedMocksCount,
+        totalAttempts: totalUserAttempts,
+      },
       tests: tests.map((t, idx) => {
         const testAttempts = attemptsByTest.get(String(t._id)) ?? [];
         const inProgress = testAttempts.find((a) => a.status === "in-progress");
@@ -197,6 +223,7 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
           canReattempt,
           isFreeDemo: idx < freeDemoCount || !!t.isFreeDemo,
           isLocked,
+          attemptedCount: globalAttemptsMap.get(String(t._id)) || 0,
         };
       }),
     });

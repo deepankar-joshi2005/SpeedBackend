@@ -4,13 +4,17 @@ import User from "../models/user.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { signPath } from "../utils/signedUrl";
 
+import Category from "../models/category.model";
+
 export const listEbooksForStudent = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [ebooks, user] = await Promise.all([
+    const [ebooks, user, categories] = await Promise.all([
       Ebook.find({ isActive: true }).sort({ category: 1, displayOrder: 1, createdAt: -1 }),
       User.findById(req.userId, "viewedEbookIds purchasedEbookIds isCoachingStudent"),
+      Category.find({ isActive: true }),
     ]);
 
+    const categoryMap = new Map(categories.map((c) => [c.name, c.iconImage]));
     const viewedSet = new Set((user?.viewedEbookIds ?? []).map((id) => String(id)));
     const purchasedSet = new Set((user?.purchasedEbookIds ?? []).map((id) => String(id)));
 
@@ -22,6 +26,7 @@ export const listEbooksForStudent = async (req: AuthRequest, res: Response): Pro
           id: String(e._id),
           title: e.title,
           category: e.category,
+          categoryIcon: categoryMap.get(e.category) || e.coverImage || null,
           author: e.author,
           description: e.description,
           coverImage: e.coverImage,

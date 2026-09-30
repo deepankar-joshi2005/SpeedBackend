@@ -2,8 +2,10 @@ import { Response } from "express";
 import TestSeries from "../models/testSeries.model";
 import Test from "../models/test.model";
 import TestAttempt from "../models/testAttempt.model";
+import Category from "../models/category.model";
 import User from "../models/user.model";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { calculateStreak } from "../utils/streak";
 
 // Sectional Test reuses the exact same TestSeries/Test/TestAttempt/Purchase
 // machinery as regular exam test series — a series with kind:"sectional" is
@@ -82,20 +84,41 @@ export const getSectionalSeriesTests = async (req: AuthRequest, res: Response): 
     const isSeriesPaid = series.accessType === "paid" || !!series.isPaid;
     const freeDemoCount = series.freeDemoCount ?? 1;
 
+    const categoryDoc = await Category.findOne({ name: series.category, isActive: true });
+
     const attempts = await TestAttempt.find({
       user: userId,
       test: { $in: tests.map((t) => t._id) },
     });
     const attemptsByTest = new Map<string, typeof attempts>();
+    let totalUserAttempts = 0;
+    let completedMocksCount = 0;
+
     for (const a of attempts) {
       const key = String(a.test);
       const arr = attemptsByTest.get(key) ?? [];
       arr.push(a);
       attemptsByTest.set(key, arr);
+      if (a.status === "completed") {
+        totalUserAttempts++;
+      }
     }
+    for (const [, arr] of attemptsByTest) {
+      if (arr.some((a) => a.status === "completed")) {
+        completedMocksCount++;
+      }
+    }
+
+    const testIds = tests.map((t) => t._id);
+    const globalAttemptsAgg = await TestAttempt.aggregate([
+      { $match: { test: { $in: testIds }, status: "completed" } },
+      { $group: { _id: "$test", count: { $sum: 1 } } },
+    ]);
+    const globalAttemptsMap = new Map(globalAttemptsAgg.map((g) => [String(g._id), g.count]));
 
     res.status(200).json({
       category: series.category,
+      categoryIcon: categoryDoc?.iconImage || series.bannerImage || null,
       seriesId: String(series._id),
       seriesTitle: series.title,
       bannerImage: series.bannerImage,
@@ -104,6 +127,11 @@ export const getSectionalSeriesTests = async (req: AuthRequest, res: Response): 
       coachingPrice: series.coachingPrice ?? 0,
       isPurchased: isSeriesPurchased,
       isCoachingStudent: !!userDoc?.isCoachingStudent,
+      userStats: {
+        streakDays: calculateStreak(attempts.filter(a => a.status === "completed").map(a => a.submittedAt)),
+        mocksTaken: completedMocksCount,
+        totalAttempts: totalUserAttempts,
+      },
       tests: tests.map((t, idx) => {
         const testAttempts = attemptsByTest.get(String(t._id)) ?? [];
         const inProgress = testAttempts.find((a) => a.status === "in-progress");
@@ -139,6 +167,7 @@ export const getSectionalSeriesTests = async (req: AuthRequest, res: Response): 
           canReattempt,
           isFreeDemo: !isSeriesPaid || !!t.isFreeDemo || idx < freeDemoCount,
           isLocked,
+          attemptedCount: globalAttemptsMap.get(String(t._id)) || 0,
         };
       }),
     });
