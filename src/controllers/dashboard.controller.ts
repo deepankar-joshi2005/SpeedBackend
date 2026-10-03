@@ -9,7 +9,7 @@ import TeacherInfo from "../models/teacherInfo.model";
 import SuccessStory from "../models/successStory.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { calculateStreak } from "../utils/streak";
-import { getEffectiveWindow, getResultLockUntil, formatTimeLabel } from "../utils/testSchedule";
+import { getEffectiveWindow, getResultLockUntil, formatTimeLabel, formatTimeOfDay } from "../utils/testSchedule";
 
 export const getStreak = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -176,7 +176,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
         durationMinutes: t.durationMinutes || 60,
         totalMarks: t.totalMarks || 200,
         isLive: true,
-        liveTimeLabel: t.startTime ? `Live at ${formatTimeLabel(getEffectiveWindow(t).effectiveStart as Date)}` : null,
+        liveTimeLabel: t.startTime ? `Live at ${formatTimeOfDay(t.startTime)}` : null,
         category: typeof t.series === "object" && t.series && "category" in t.series ? (t.series as any).category : "SSC",
       }));
 

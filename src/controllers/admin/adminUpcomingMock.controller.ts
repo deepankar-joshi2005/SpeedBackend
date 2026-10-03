@@ -3,6 +3,7 @@ import UpcomingMock from "../../models/upcomingMock.model";
 import Test from "../../models/test.model";
 import TestSeries from "../../models/testSeries.model";
 import { AuthRequest } from "../../middleware/auth.middleware";
+import { formatTimeOfDay } from "../../utils/testSchedule";
 
 const normalizeUpcoming = (u: any) => ({
   id: String(u._id),
@@ -14,6 +15,11 @@ const normalizeUpcoming = (u: any) => ({
   totalMarks: u.totalMarks,
   category: u.category || "",
   startDate: u.startDate,
+  // The test's own startTime (if the admin set one) — the date-only
+  // startDate has no time-of-day info, so any clock reading derived from it
+  // directly is a timezone artifact, not real data. Only this field (or
+  // null, meaning "no specific time") should ever be shown to students.
+  startTimeLabel: u.startTime ? formatTimeOfDay(u.startTime) : null,
 });
 
 // GET /admin/upcoming-mocks — list all upcoming entries
@@ -46,6 +52,7 @@ export const getAvailableTests = async (_req: AuthRequest, res: Response): Promi
       durationMinutes: t.durationMinutes,
       totalMarks: t.totalMarks,
       startDate: t.startDate,
+      startTimeLabel: t.startTime ? formatTimeOfDay(t.startTime) : null,
       alreadyAdded: existingIds.has(String(t._id)),
     }));
 
@@ -90,6 +97,7 @@ export const addUpcomingMock = async (req: AuthRequest, res: Response): Promise<
       totalMarks: test.totalMarks,
       category: (test.series as any)?.category || "",
       startDate: test.startDate,
+      startTime: test.startTime,
     });
 
     res.status(201).json(normalizeUpcoming(mock));

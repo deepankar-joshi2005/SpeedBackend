@@ -2,15 +2,33 @@ import { ITest } from "../models/test.model";
 
 type ScheduleFields = Pick<ITest, "startDate" | "endDate" | "startTime" | "endTime">;
 
-/** Combines a date with an optional "HH:mm" time. Without a time, the date is returned as-is. */
+// This app only serves Indian students, and all "HH:mm" time fields are
+// entered by admins as India time. IST is a fixed UTC+5:30 offset with no
+// daylight saving, so it's hardcoded here rather than left to the server
+// process's own timezone — a server that happens to run in UTC (common on
+// cloud hosts) would otherwise silently combine dates with the wrong hour
+// and both enforce and *display* the wrong time.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/** Combines a date with an optional "HH:mm" (India time) time. Without a time, the date is returned as-is. */
 export function combineDateTime(date: Date | null | undefined, time: string | null | undefined): Date | null {
   if (!date) return null;
   if (!time) return new Date(date);
   const [hours, minutes] = time.split(":").map(Number);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return new Date(date);
-  const combined = new Date(date);
-  combined.setHours(hours, minutes, 0, 0);
-  return combined;
+
+  // `date` is normally a date-only value (e.g. admin picked "10 Oct"), which
+  // JS/Mongo store as UTC midnight. Shift by the IST offset before reading
+  // the UTC getters so we recover the calendar date as it falls in India,
+  // regardless of what timezone this process itself is running in.
+  const istShifted = new Date(date.getTime() + IST_OFFSET_MS);
+  const y = istShifted.getUTCFullYear();
+  const m = istShifted.getUTCMonth();
+  const d = istShifted.getUTCDate();
+
+  // Build "y-m-d hours:minutes IST" as a UTC instant, then shift back.
+  const utcMillisForIstWallClock = Date.UTC(y, m, d, hours, minutes, 0, 0) - IST_OFFSET_MS;
+  return new Date(utcMillisForIstWallClock);
 }
 
 /**
@@ -37,7 +55,12 @@ export function getResultLockUntil(test: ScheduleFields): Date | null {
 }
 
 export function formatTimeLabel(date: Date): string {
-  return date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+  return date.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 export function formatDateTimeLabel(date: Date): string {
@@ -47,5 +70,15 @@ export function formatDateTimeLabel(date: Date): string {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
   });
+}
+
+/** Formats a raw "HH:mm" time-of-day string (e.g. "09:00") as "9:00 AM" — pure string math, no Date/timezone involved. */
+export function formatTimeOfDay(time: string): string | null {
+  const [hours, minutes] = time.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  const period = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(minutes).padStart(2, "0")} ${period}`;
 }

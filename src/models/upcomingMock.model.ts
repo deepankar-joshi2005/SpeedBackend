@@ -9,6 +9,7 @@ export interface IUpcomingMock extends Document {
   totalMarks: number;
   category: string;
   startDate: Date;
+  startTime: string | null;
   createdAt: Date;
 }
 
@@ -22,6 +23,7 @@ const upcomingMockSchema = new Schema<IUpcomingMock>(
     totalMarks: { type: Number, default: 0 },
     category: { type: String, default: "" },
     startDate: { type: Date, required: true },
+    startTime: { type: String, default: null },
   },
   { timestamps: true }
 );
