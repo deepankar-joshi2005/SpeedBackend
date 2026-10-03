@@ -20,6 +20,8 @@ const CONFIG_FIELDS = [
   "maxAttempts",
   "startDate",
   "endDate",
+  "startTime",
+  "endTime",
   "accessLevel",
   "isFreeDemo",
 ] as const;

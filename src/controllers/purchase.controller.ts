@@ -6,6 +6,7 @@ import User from "../models/user.model";
 import Order from "../models/order.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { razorpay, getRazorpayKeyId, getRazorpayKeySecret } from "../config/razorpay";
+import { resolveSeriesPrice } from "../utils/pricing";
 
 function verifyPaymentSignature(orderId: string, paymentId: string, signature: string): boolean {
   const secret = getRazorpayKeySecret();
@@ -53,11 +54,7 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 
     const isCoaching = !!user.isCoachingStudent;
     const isPaidSeries = series.accessType === "paid" || !!series.isPaid;
-    const amount = !isPaidSeries
-      ? 0
-      : isCoaching
-      ? (series.coachingPrice > 0 ? series.coachingPrice : series.price)
-      : series.price;
+    const amount = !isPaidSeries ? 0 : resolveSeriesPrice(series, isCoaching);
 
     if (isPaidSeries && amount <= 0) {
       // Data bug: series is marked paid but has no price configured — never

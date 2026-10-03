@@ -9,6 +9,7 @@ import TeacherInfo from "../models/teacherInfo.model";
 import SuccessStory from "../models/successStory.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { calculateStreak } from "../utils/streak";
+import { getEffectiveWindow, getResultLockUntil, formatTimeLabel } from "../utils/testSchedule";
 
 export const getStreak = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -78,9 +79,15 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
 
     // Drop in-progress attempts whose underlying Test was deleted — resuming
     // them would 404, so they should never surface as a "Resume Test" card.
-    const inProgressTestIds = myActivitiesList.map((a) => a.test);
-    const existingTests = await Test.find({ _id: { $in: inProgressTestIds } }).select("_id");
-    const existingTestIdSet = new Set(existingTests.map((t) => String(t._id)));
+    // Also used (full docs, not just _id) to compute each completed
+    // attempt's result-lock window below.
+    const activityTestIds = [
+      ...myActivitiesList.map((a) => a.test),
+      ...completedAttemptsList.map((a) => a.test),
+    ];
+    const activityTests = await Test.find({ _id: { $in: activityTestIds } });
+    const existingTestIdSet = new Set(activityTests.map((t) => String(t._id)));
+    const activityTestsById = new Map(activityTests.map((t) => [String(t._id), t]));
     const validInProgressAttempts = myActivitiesList.filter((a) =>
       existingTestIdSet.has(String(a.test))
     );
@@ -142,12 +149,24 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       bio: dbTeacherInfo?.bio || "Dedicated to shaping future officers & leaders with Speed Education.",
     };
 
+      // Scheduling is date+optional-time based (see utils/testSchedule.ts), so
+      // the live/not-live check can't be expressed as a single Mongo range
+      // query once a time-of-day is involved — fetch dated, published
+      // candidates and filter the effective window in memory.
       const now = new Date();
-      const activePublishedTests = await Test.find({
+      const scheduledPublishedTests = await Test.find({
         status: "published",
-        startDate: { $ne: null, $lte: now },
-        endDate: { $ne: null, $gte: now },
-      }).populate("series", "title category").limit(10);
+        startDate: { $ne: null },
+      }).populate("series", "title category").limit(50);
+
+      const activePublishedTests = scheduledPublishedTests
+        .filter((t) => {
+          const { effectiveStart, effectiveEnd } = getEffectiveWindow(t);
+          if (!effectiveStart || effectiveStart > now) return false;
+          if (!effectiveEnd || effectiveEnd < now) return false;
+          return true;
+        })
+        .slice(0, 10);
 
       const liveMocks = activePublishedTests.map((t, idx) => ({
         id: t._id,
@@ -157,6 +176,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
         durationMinutes: t.durationMinutes || 60,
         totalMarks: t.totalMarks || 200,
         isLive: true,
+        liveTimeLabel: t.startTime ? `Live at ${formatTimeLabel(getEffectiveWindow(t).effectiveStart as Date)}` : null,
         category: typeof t.series === "object" && t.series && "category" in t.series ? (t.series as any).category : "SSC",
       }));
 
@@ -186,6 +206,9 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
 
     const myActivities = recentAttempts.map((a) => {
       const isCompleted = a.status === "completed";
+      const test = isCompleted ? activityTestsById.get(String(a.test)) : undefined;
+      const lockUntil = test ? getResultLockUntil(test) : null;
+      const resultLocked = isCompleted && !!lockUntil && new Date() < lockUntil;
       return {
         attemptId: a._id,
         testId: a.test,
@@ -200,8 +223,10 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
           : a.totalQuestions > 0
           ? Math.round((a.questionsCompleted / a.totalQuestions) * 100)
           : 0,
-        score: isCompleted ? a.score : null,
-        accuracy: isCompleted ? a.accuracy : null,
+        score: isCompleted && !resultLocked ? a.score : null,
+        accuracy: isCompleted && !resultLocked ? a.accuracy : null,
+        resultLocked,
+        resultAvailableAtLabel: resultLocked ? formatTimeLabel(lockUntil as Date) : null,
       };
     });
 

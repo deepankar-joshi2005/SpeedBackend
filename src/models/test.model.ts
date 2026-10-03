@@ -26,6 +26,12 @@ export interface ITest extends Document {
   difficulty: string;
   startDate: Date | null;
   endDate: Date | null;
+  // "HH:mm" 24-hour strings, optional. When set they combine with
+  // startDate/endDate to produce an exact live/attempt/result window; when
+  // null, scheduling stays purely date-based (today's existing behaviour).
+  // See src/utils/testSchedule.ts.
+  startTime: string | null;
+  endTime: string | null;
   status: TestStatus;
   order: number;
   subjectSections: ISubjectSection[];
@@ -61,6 +67,8 @@ const testSchema = new Schema<ITest>({
   difficulty: { type: String, required: true, default: "Mixed", trim: true },
   startDate: { type: Date, default: null },
   endDate: { type: Date, default: null },
+  startTime: { type: String, default: null },
+  endTime: { type: String, default: null },
   status: { type: String, enum: ["draft", "published"], default: "draft" },
   order: { type: Number, default: 0 },
   subjectSections: { type: [subjectSectionSchema], default: [] },

@@ -8,6 +8,8 @@ import Notification from "../models/notification.model";
 import User from "../models/user.model";
 import Purchase from "../models/purchase.model";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { resolveSeriesPrice } from "../utils/pricing";
+import { getEffectiveWindow, getResultLockUntil, formatDateTimeLabel, formatTimeLabel } from "../utils/testSchedule";
 
 const COACHING_ONLY_MESSAGE =
   "This test is only for Coaching Students. Please contact your Coaching Admin for access.";
@@ -256,12 +258,12 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
         (await Purchase.exists({ user: userId, testSeries: series._id, status: "success" }));
 
       const isFreeDemo = test.isFreeDemo || test.order < (series.freeDemoCount ?? 1);
+      const requiredPrice = resolveSeriesPrice(series, !!user?.isCoachingStudent);
 
-      if (!isPurchased && !isFreeDemo) {
-        const requiredPrice = user?.isCoachingStudent
-          ? (series.coachingPrice > 0 ? series.coachingPrice : series.price)
-          : series.price;
-
+      // A coaching student whose series is configured Free-for-Coaching
+      // (requiredPrice resolves to 0) gets the same direct access as a free
+      // demo — no 403, no payment modal, no gateway ever opens for them.
+      if (!isPurchased && !isFreeDemo && requiredPrice > 0) {
         res.status(403).json({
           code: "TEST_SERIES_PAID",
           message: "This test is part of a Paid Test Series. Please purchase the test series to unlock all tests.",
@@ -274,16 +276,17 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     const now = new Date();
-    if (test.startDate && now < new Date(test.startDate)) {
+    const { effectiveStart, effectiveEnd } = getEffectiveWindow(test);
+    if (effectiveStart && now < effectiveStart) {
       res.status(403).json({
-        message: `This test is scheduled to start on ${new Date(test.startDate).toLocaleString()}. Please wait until then.`,
+        message: `This test is scheduled to start on ${formatDateTimeLabel(effectiveStart)}. Please wait until then.`,
       });
       return;
     }
 
-    if (test.endDate && now > new Date(test.endDate)) {
+    if (effectiveEnd && now > effectiveEnd) {
       res.status(403).json({
-        message: `This test ended on ${new Date(test.endDate).toLocaleString()} and is no longer available.`,
+        message: `This test ended on ${formatDateTimeLabel(effectiveEnd)} and is no longer available.`,
       });
       return;
     }
@@ -600,6 +603,17 @@ export const getResult = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
     const test = await Test.findById(attempt.test);
+
+    const lockUntil = test ? getResultLockUntil(test) : null;
+    if (lockUntil && new Date() < lockUntil) {
+      res.status(403).json({
+        code: "RESULT_LOCKED",
+        message: `Result will be shown at ${formatTimeLabel(lockUntil)}. Your test has been submitted successfully.`,
+        availableAt: lockUntil,
+      });
+      return;
+    }
+
     res.status(200).json(await buildResultPayload(attempt, test, userId));
   } catch (error) {
     res.status(500).json({ message: "Failed to load result", error });
@@ -617,6 +631,17 @@ export const getSolutions = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
     const test = await Test.findById(attempt.test);
+
+    const lockUntil = test ? getResultLockUntil(test) : null;
+    if (lockUntil && new Date() < lockUntil) {
+      res.status(403).json({
+        code: "RESULT_LOCKED",
+        message: `Solutions will be shown at ${formatTimeLabel(lockUntil)}.`,
+        availableAt: lockUntil,
+      });
+      return;
+    }
+
     const questions = await Question.find({ test: attempt.test }).sort({ order: 1 });
 
     const answerMap = new Map(attempt.answers.map((a) => [String(a.question), a]));
@@ -664,19 +689,42 @@ export const getHistory = async (req: AuthRequest, res: Response): Promise<void>
       .limit(30);
 
     const tests = await Test.find({ _id: { $in: attempts.map((a) => a.test) } });
-    const passingMarksMap = new Map(tests.map((t) => [String(t._id), t.passingMarks]));
+    const testsMap = new Map(tests.map((t) => [String(t._id), t]));
 
     res.status(200).json(
-      attempts.map((a) => ({
-        attemptId: a._id,
-        title: a.title,
-        score: a.score,
-        scorePercent: a.scorePercent,
-        rank: a.rank,
-        totalCandidates: a.totalCandidates,
-        passed: didPass(a.score, a.scorePercent, passingMarksMap.get(String(a.test))),
-        submittedAt: a.submittedAt,
-      }))
+      attempts.map((a) => {
+        const test = testsMap.get(String(a.test));
+        const lockUntil = test ? getResultLockUntil(test) : null;
+        const locked = !!lockUntil && new Date() < lockUntil;
+
+        if (locked) {
+          return {
+            attemptId: a._id,
+            title: a.title,
+            score: null,
+            scorePercent: null,
+            rank: null,
+            totalCandidates: null,
+            passed: null,
+            submittedAt: a.submittedAt,
+            resultLocked: true,
+            resultAvailableAtLabel: formatTimeLabel(lockUntil as Date),
+          };
+        }
+
+        return {
+          attemptId: a._id,
+          title: a.title,
+          score: a.score,
+          scorePercent: a.scorePercent,
+          rank: a.rank,
+          totalCandidates: a.totalCandidates,
+          passed: didPass(a.score, a.scorePercent, test?.passingMarks),
+          submittedAt: a.submittedAt,
+          resultLocked: false,
+          resultAvailableAtLabel: null,
+        };
+      })
     );
   } catch (error) {
     res.status(500).json({ message: "Failed to load test history", error });

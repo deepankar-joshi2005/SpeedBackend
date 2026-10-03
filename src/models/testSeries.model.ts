@@ -21,6 +21,11 @@ export interface ITestSeries extends Document {
   isPaid?: boolean;
   price: number;
   coachingPrice: number;
+  // Optional (no schema default) on purpose: series saved before this field
+  // existed read back as `undefined`, which the pricing resolver treats as
+  // "needs the old coachingPrice>0 heuristic" rather than silently becoming
+  // "paid" or "free". See src/utils/pricing.ts.
+  coachingAccessType?: AccessType;
   freeDemoCount: number;
   validityMonths: number;
   startDate: Date | null;
@@ -48,6 +53,7 @@ const testSeriesSchema = new Schema<ITestSeries>({
   isPaid: { type: Boolean, default: true },
   price: { type: Number, default: 0 },
   coachingPrice: { type: Number, default: 0 },
+  coachingAccessType: { type: String, enum: ["free", "paid"] },
   freeDemoCount: { type: Number, default: 1 },
   validityMonths: { type: Number, default: 12 },
   startDate: { type: Date, default: null },
