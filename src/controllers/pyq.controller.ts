@@ -15,12 +15,13 @@ export const listPyqsForStudent = async (req: AuthRequest, res: Response): Promi
         year: -1,
         displayOrder: 1,
       }),
-      User.findById(req.userId, "purchasedPyqIds isCoachingStudent"),
+      User.findById(req.userId, "purchasedPyqIds downloadedPyqIds isCoachingStudent"),
       Category.find({ isActive: true }),
     ]);
 
     const categoryMap = new Map(categories.map((c) => [c.name, c.iconImage]));
     const purchasedSet = new Set((user?.purchasedPyqIds ?? []).map((id) => String(id)));
+    const downloadedSet = new Set((user?.downloadedPyqIds ?? []).map((id) => String(id)));
 
     res.status(200).json(
       pyqs.map((p) => {
@@ -41,11 +42,61 @@ export const listPyqsForStudent = async (req: AuthRequest, res: Response): Promi
           isCoachingStudent: !!user?.isCoachingStudent,
           isPurchased,
           isLocked,
+          isDownloaded: downloadedSet.has(String(p._id)),
           createdAt: p.createdAt,
         };
       })
     );
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch previous year papers", error });
+  }
+};
+
+export const markPyqDownloaded = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await User.findByIdAndUpdate(req.userId, {
+      $addToSet: { downloadedPyqIds: req.params.id },
+    });
+    res.status(200).json({ message: "Marked as downloaded" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to mark paper as downloaded", error });
+  }
+};
+
+export const getMyDownloadedPyqs = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await User.findById(req.userId, "downloadedPyqIds purchasedPyqIds isCoachingStudent");
+    const downloadedIds = user?.downloadedPyqIds ?? [];
+    if (downloadedIds.length === 0) {
+      res.status(200).json([]);
+      return;
+    }
+
+    const [pyqs, categories] = await Promise.all([
+      Pyq.find({ _id: { $in: downloadedIds } }),
+      Category.find({ isActive: true }),
+    ]);
+
+    const categoryMap = new Map(categories.map((c) => [c.name, c.iconImage]));
+    const purchasedSet = new Set((user?.purchasedPyqIds ?? []).map((id) => String(id)));
+
+    res.status(200).json(
+      pyqs.map((p) => {
+        const isPurchased = purchasedSet.has(String(p._id));
+        const isLocked = p.accessType === "paid" && !isPurchased;
+        return {
+          id: String(p._id),
+          title: p.title,
+          category: p.category,
+          categoryIcon: categoryMap.get(p.category) || null,
+          examName: p.examName,
+          year: p.year,
+          fileUrl: isLocked ? null : signPath(p.fileUrl),
+          isLocked,
+        };
+      })
+    );
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load downloaded papers", error });
   }
 };
