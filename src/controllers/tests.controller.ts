@@ -193,7 +193,7 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
 
     res.status(200).json({
       category,
-      categoryIcon: categoryDoc?.iconImage || series?.bannerImage || null,
+      categoryIcon: categoryDoc?.iconImage || null,
       seriesId: series ? String(series._id) : null,
       seriesTitle: series?.title ?? `${category} Mock Tests`,
       bannerImage: series?.bannerImage ?? null,
@@ -383,7 +383,7 @@ export const getTestsBySeriesId = async (req: AuthRequest, res: Response): Promi
 
     res.status(200).json({
       category: series.category,
-      categoryIcon: categoryDoc?.iconImage || series.bannerImage || null,
+      categoryIcon: categoryDoc?.iconImage || null,
       seriesId: String(series._id),
       seriesTitle: series.title,
       bannerImage: series.bannerImage,
