@@ -202,6 +202,31 @@ export const getMyPurchases = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId as string;
+    const purchases = await Purchase.find({ user: userId, status: "success" })
+      .sort({ createdAt: -1 })
+      .populate("testSeries", "title category bannerImage");
+
+    res.status(200).json(
+      purchases
+        .filter((p) => !!p.testSeries)
+        .map((p) => ({
+          purchaseId: String(p._id),
+          seriesId: String((p.testSeries as any)._id),
+          title: (p.testSeries as any).title as string,
+          category: (p.testSeries as any).category as string,
+          bannerImage: (p.testSeries as any).bannerImage ?? null,
+          amountPaid: p.amountPaid,
+          purchasedAt: p.createdAt,
+        }))
+    );
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load orders", error });
+  }
+};
+
 export const getRevenueSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const purchases = await Purchase.find({ status: "success" }).populate("testSeries", "title");

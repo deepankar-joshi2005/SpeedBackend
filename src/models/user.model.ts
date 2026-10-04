@@ -21,6 +21,7 @@ export interface IUser extends Document {
   purchasedPyqIds: mongoose.Types.ObjectId[];
   purchasedEbookIds: mongoose.Types.ObjectId[];
   viewedEbookIds: mongoose.Types.ObjectId[];
+  downloadedEbookIds: mongoose.Types.ObjectId[];
   activeSessionId: string | null;
   activeSessionAt: Date | null;
   createdAt: Date;
@@ -41,6 +42,7 @@ const userSchema = new Schema<IUser>({
   purchasedPyqIds: [{ type: Schema.Types.ObjectId, ref: "Pyq" }],
   purchasedEbookIds: [{ type: Schema.Types.ObjectId, ref: "Ebook" }],
   viewedEbookIds: [{ type: Schema.Types.ObjectId, ref: "Ebook" }],
+  downloadedEbookIds: [{ type: Schema.Types.ObjectId, ref: "Ebook" }],
   activeSessionId: { type: String, default: null },
   activeSessionAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },

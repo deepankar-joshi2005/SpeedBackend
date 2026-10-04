@@ -1,11 +1,23 @@
 import mongoose from "mongoose";
 import { Response } from "express";
-import TestSeries from "../models/testSeries.model";
+import TestSeries, { ITestSeries } from "../models/testSeries.model";
 import Category from "../models/category.model";
 import Test from "../models/test.model";
 import TestAttempt from "../models/testAttempt.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { calculateStreak } from "../utils/streak";
+import { resolveSeriesPrice } from "../utils/pricing";
+
+// What a series actually costs the current user. A series flagged
+// accessType:"paid" can still resolve to 0 for a given user (e.g. a
+// coaching student whose series is configured Free-for-Coaching via
+// coachingAccessType) — in that case it must behave exactly like a free
+// series: no lock badge, no price, no payment prompt. See utils/pricing.ts.
+function resolvePaidForUser(series: ITestSeries, isCoachingStudent: boolean) {
+  const requiredPrice = resolveSeriesPrice(series, isCoachingStudent);
+  const isPaid = (series.accessType === "paid" || !!series.isPaid) && requiredPrice > 0;
+  return { requiredPrice, isPaid };
+}
 
 export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -40,6 +52,7 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
       string,
       {
         seriesId: string;
+        seriesCount: number;
         totalTests: number;
         totalQuestions: number;
         durationMinutes: number;
@@ -60,12 +73,14 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
 
       const existing = byCategory.get(series.category);
       if (existing) {
+        existing.seriesCount += 1;
         existing.totalTests += displayTests;
         existing.totalQuestions += liveQuestionCount;
         if (purchased) existing.isPurchased = true;
       } else {
         byCategory.set(series.category, {
           seriesId: seriesKey,
+          seriesCount: 1,
           totalTests: displayTests,
           totalQuestions: liveQuestionCount,
           durationMinutes: series.durationMinutes,
@@ -93,6 +108,7 @@ export const getTestSeriesSummary = async (req: AuthRequest, res: Response): Pro
           category: cat.name,
           seriesId: agg.seriesId,
           iconImage: cat.iconImage,
+          totalSeries: agg.seriesCount,
           totalTests: agg.totalTests,
           totalQuestions: agg.totalQuestions,
           durationMinutes: agg.durationMinutes,
@@ -138,7 +154,10 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
     }).sort({ order: 1 });
 
     const isSeriesPurchased = series ? purchasedSeriesIds.has(String(series._id)) : false;
-    const isSeriesPaid = series ? (series.accessType === "paid" || !!series.isPaid) : false;
+    const isCoaching = !!userDoc?.isCoachingStudent;
+    const { requiredPrice, isPaid: isSeriesPaid } = series
+      ? resolvePaidForUser(series, isCoaching)
+      : { requiredPrice: 0, isPaid: false };
     const freeDemoCount = series?.freeDemoCount ?? 1;
 
     const attempts = await TestAttempt.find({
@@ -179,12 +198,202 @@ export const getTestsByCategory = async (req: AuthRequest, res: Response): Promi
       seriesTitle: series?.title ?? `${category} Mock Tests`,
       bannerImage: series?.bannerImage ?? null,
       isPaid: isSeriesPaid,
-      price: series?.price ?? 0,
-      coachingPrice: series?.coachingPrice ?? 0,
+      price: requiredPrice,
+      coachingPrice: requiredPrice,
       isPurchased: isSeriesPurchased,
       isCoachingStudent: !!userDoc?.isCoachingStudent,
       userStats: {
         streakDays: calculateStreak(attempts.filter(a => a.status === "completed").map(a => a.submittedAt)),
+        mocksTaken: completedMocksCount,
+        totalAttempts: totalUserAttempts,
+      },
+      tests: tests.map((t, idx) => {
+        const testAttempts = attemptsByTest.get(String(t._id)) ?? [];
+        const inProgress = testAttempts.find((a) => a.status === "in-progress");
+        const completed = testAttempts
+          .filter((a) => a.status === "completed")
+          .sort((a, b) => (b.submittedAt?.getTime() ?? 0) - (a.submittedAt?.getTime() ?? 0));
+        const latestCompleted = completed[0];
+
+        let status: "not-attempted" | "in-progress" | "completed" = "not-attempted";
+        if (inProgress) status = "in-progress";
+        else if (latestCompleted) status = "completed";
+
+        const attemptsUsed = completed.length;
+        const canReattempt =
+          status === "completed" && (t.maxAttempts === 0 || attemptsUsed < t.maxAttempts);
+
+        const isFree = !isSeriesPaid || isSeriesPurchased || idx < freeDemoCount || !!t.isFreeDemo;
+        const isLocked = !isFree;
+
+        return {
+          id: t._id,
+          title: t.title,
+          totalQuestions: t.totalQuestions,
+          durationMinutes: t.durationMinutes,
+          totalMarks: t.totalMarks,
+          difficulty: t.difficulty,
+          status,
+          attemptId: inProgress?._id ?? latestCompleted?._id ?? null,
+          score: latestCompleted?.score ?? null,
+          scorePercent: latestCompleted?.scorePercent ?? null,
+          maxAttempts: t.maxAttempts,
+          attemptsUsed,
+          canReattempt,
+          isFreeDemo: idx < freeDemoCount || !!t.isFreeDemo,
+          isLocked,
+          attemptedCount: globalAttemptsMap.get(String(t._id)) || 0,
+        };
+      }),
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load tests", error });
+  }
+};
+
+// One row per Test Series within a category (the middle tier between the
+// Category list and an individual series' Test list).
+export const getSeriesByCategory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId as string;
+    const category = String(req.params.category);
+
+    const userDoc = await mongoose.model("User").findById(userId);
+    const isCoaching = !!userDoc?.isCoachingStudent;
+    const purchasedSeriesIds = new Set((userDoc?.purchasedSeries || []).map((id: any) => String(id)));
+
+    const safeCategoryRegex = new RegExp(`^${category.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, "i");
+    const seriesList = await TestSeries.find({
+      category: { $regex: safeCategoryRegex },
+      isAvailable: true,
+      status: { $ne: "draft" },
+    }).sort({ createdAt: 1 });
+
+    const seriesIds = seriesList.map((s) => s._id);
+    const tests = await Test.find({ series: { $in: seriesIds }, status: { $ne: "draft" } });
+
+    const testCountBySeries = new Map<string, number>();
+    const questionCountBySeries = new Map<string, number>();
+    for (const t of tests) {
+      const key = String(t.series);
+      testCountBySeries.set(key, (testCountBySeries.get(key) ?? 0) + 1);
+      questionCountBySeries.set(key, (questionCountBySeries.get(key) ?? 0) + t.totalQuestions);
+    }
+
+    const attempts = await TestAttempt.find({
+      user: userId,
+      test: { $in: tests.map((t) => t._id) },
+      status: "completed",
+    });
+    const testToSeries = new Map(tests.map((t) => [String(t._id), String(t.series)]));
+    const completedQuestionsBySeries = new Map<string, number>();
+    for (const a of attempts) {
+      const seriesKey = testToSeries.get(String(a.test));
+      if (!seriesKey) continue;
+      completedQuestionsBySeries.set(
+        seriesKey,
+        (completedQuestionsBySeries.get(seriesKey) ?? 0) + a.questionsCompleted
+      );
+    }
+
+    const result = seriesList.map((series) => {
+      const seriesKey = String(series._id);
+      const liveTestCount = testCountBySeries.get(seriesKey) ?? 0;
+      const totalTests = liveTestCount > 0 ? liveTestCount : series.totalPapers;
+      const totalQuestions = questionCountBySeries.get(seriesKey) ?? series.totalQuestions ?? 0;
+      const { requiredPrice, isPaid } = resolvePaidForUser(series, isCoaching);
+      const completedQuestions = completedQuestionsBySeries.get(seriesKey) ?? 0;
+      const percentCompleted = totalQuestions
+        ? Math.min(100, Math.round((completedQuestions / totalQuestions) * 100))
+        : 0;
+
+      return {
+        seriesId: seriesKey,
+        title: series.title,
+        bannerImage: series.bannerImage,
+        totalTests,
+        totalQuestions,
+        durationMinutes: series.durationMinutes,
+        difficulty: series.difficulty,
+        percentCompleted,
+        isPaid,
+        price: requiredPrice,
+        isPurchased: purchasedSeriesIds.has(seriesKey),
+      };
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load test series for category", error });
+  }
+};
+
+// Tests within exactly one Test Series (selected from the series-within-category list).
+export const getTestsBySeriesId = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId as string;
+    const { seriesId } = req.params;
+
+    const series = await TestSeries.findById(seriesId);
+    if (!series) {
+      res.status(404).json({ message: "Test series not found" });
+      return;
+    }
+
+    const userDoc = await mongoose.model("User").findById(userId);
+    const isCoaching = !!userDoc?.isCoachingStudent;
+    const purchasedSeriesIds = new Set((userDoc?.purchasedSeries || []).map((id: any) => String(id)));
+
+    const categoryDoc = await Category.findOne({ name: series.category, isActive: true });
+    const tests = await Test.find({ series: series._id, status: { $ne: "draft" } }).sort({ order: 1 });
+
+    const isSeriesPurchased = purchasedSeriesIds.has(String(series._id));
+    const { requiredPrice, isPaid: isSeriesPaid } = resolvePaidForUser(series, isCoaching);
+    const freeDemoCount = series.freeDemoCount ?? 1;
+
+    const attempts = await TestAttempt.find({
+      user: userId,
+      test: { $in: tests.map((t) => t._id) },
+    });
+    const attemptsByTest = new Map<string, typeof attempts>();
+    let totalUserAttempts = 0;
+    let completedMocksCount = 0;
+
+    for (const a of attempts) {
+      const key = String(a.test);
+      const arr = attemptsByTest.get(key) ?? [];
+      arr.push(a);
+      attemptsByTest.set(key, arr);
+      if (a.status === "completed") {
+        totalUserAttempts++;
+      }
+    }
+    for (const [, arr] of attemptsByTest) {
+      if (arr.some((a) => a.status === "completed")) {
+        completedMocksCount++;
+      }
+    }
+
+    const testIds = tests.map((t) => t._id);
+    const globalAttemptsAgg = await TestAttempt.aggregate([
+      { $match: { test: { $in: testIds }, status: "completed" } },
+      { $group: { _id: "$test", count: { $sum: 1 } } },
+    ]);
+    const globalAttemptsMap = new Map(globalAttemptsAgg.map((g) => [String(g._id), g.count]));
+
+    res.status(200).json({
+      category: series.category,
+      categoryIcon: categoryDoc?.iconImage || series.bannerImage || null,
+      seriesId: String(series._id),
+      seriesTitle: series.title,
+      bannerImage: series.bannerImage,
+      isPaid: isSeriesPaid,
+      price: requiredPrice,
+      coachingPrice: requiredPrice,
+      isPurchased: isSeriesPurchased,
+      isCoachingStudent: isCoaching,
+      userStats: {
+        streakDays: calculateStreak(attempts.filter((a) => a.status === "completed").map((a) => a.submittedAt)),
         mocksTaken: completedMocksCount,
         totalAttempts: totalUserAttempts,
       },
