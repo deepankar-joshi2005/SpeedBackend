@@ -24,6 +24,7 @@ const CONFIG_FIELDS = [
   "endTime",
   "accessLevel",
   "isFreeDemo",
+  "addedToUpcomingMocks",
 ] as const;
 
 export const listAllTests = async (req: AuthRequest, res: Response): Promise<void> => {

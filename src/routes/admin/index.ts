@@ -13,7 +13,6 @@ import successStoryRoutes from "./successStory.routes";
 import pyqRoutes from "./pyq.routes";
 import ebookRoutes from "./ebook.routes";
 import socialMediaRoutes from "./socialMedia.routes";
-import upcomingMockRoutes from "./upcomingMock.routes";
 
 const router = Router();
 
@@ -32,6 +31,5 @@ router.use("/success-stories", successStoryRoutes);
 router.use("/pyq", pyqRoutes);
 router.use("/ebooks", ebookRoutes);
 router.use("/social-media", socialMediaRoutes);
-router.use("/upcoming-mocks", upcomingMockRoutes);
 
 export default router;

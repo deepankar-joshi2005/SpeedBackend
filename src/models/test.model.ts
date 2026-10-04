@@ -39,6 +39,11 @@ export interface ITest extends Document {
   sectionOrder: string[];
   accessLevel: TestAccessLevel;
   isFreeDemo: boolean;
+  // Opt-in: only tests an admin explicitly added show up in the student
+  // Home screen's Upcoming/Live Mocks carousels. Which of the two it falls
+  // into is still fully dynamic (see src/utils/testSchedule.ts) — this flag
+  // only gates whether the test is in that pool at all.
+  addedToUpcomingMocks: boolean;
   createdAt: Date;
 }
 
@@ -76,6 +81,7 @@ const testSchema = new Schema<ITest>({
   sectionOrder: { type: [String], default: [] },
   accessLevel: { type: String, enum: ["all", "coachingOnly"], default: "coachingOnly" },
   isFreeDemo: { type: Boolean, default: false },
+  addedToUpcomingMocks: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

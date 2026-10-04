@@ -279,6 +279,7 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
     const { effectiveStart, effectiveEnd } = getEffectiveWindow(test);
     if (effectiveStart && now < effectiveStart) {
       res.status(403).json({
+        code: "NOT_STARTED_YET",
         message: `This test is scheduled to start on ${formatDateTimeLabel(effectiveStart)}. Please wait until then.`,
       });
       return;
@@ -286,6 +287,7 @@ export const startAttempt = async (req: AuthRequest, res: Response): Promise<voi
 
     if (effectiveEnd && now > effectiveEnd) {
       res.status(403).json({
+        code: "TEST_ENDED",
         message: `This test ended on ${formatDateTimeLabel(effectiveEnd)} and is no longer available.`,
       });
       return;

@@ -38,9 +38,13 @@ export function combineDateTime(date: Date | null | undefined, time: string | nu
  * "today, cutoff 7pm" without also having to pick an end date.
  */
 export function getEffectiveWindow(test: ScheduleFields): { effectiveStart: Date | null; effectiveEnd: Date | null } {
-  const effectiveStart = combineDateTime(test.startDate, test.startTime);
+  // A date with no time-of-day defaults to the start/end of that IST day
+  // (00:00 / 23:59) rather than the raw stored instant (midnight UTC, which
+  // is actually 5:30am IST) — otherwise a date-only end date would cut the
+  // test off at 5:30am on its last day instead of covering it in full.
+  const effectiveStart = combineDateTime(test.startDate, test.startTime ?? "00:00");
   const endDateBase = test.endDate ?? (test.endTime ? test.startDate : null);
-  const effectiveEnd = combineDateTime(endDateBase, test.endTime);
+  const effectiveEnd = combineDateTime(endDateBase, test.endTime ?? "23:59");
   return { effectiveStart, effectiveEnd };
 }
 

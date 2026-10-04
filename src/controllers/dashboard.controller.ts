@@ -152,18 +152,33 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
       // Scheduling is date+optional-time based (see utils/testSchedule.ts), so
       // the live/not-live check can't be expressed as a single Mongo range
       // query once a time-of-day is involved — fetch dated, published
-      // candidates and filter the effective window in memory.
+      // candidates and filter the effective window in memory. The date range
+      // below (not a hard limit) keeps this bounded as the test catalog
+      // grows, while still always including every test that could possibly
+      // be live "now" — a flat .limit() here would silently drop a test from
+      // the live list once there are more than that many scheduled tests,
+      // regardless of whether it falls inside its live window.
       const now = new Date();
+      const dayMs = 24 * 60 * 60 * 1000;
       const scheduledPublishedTests = await Test.find({
         status: "published",
-        startDate: { $ne: null },
-      }).populate("series", "title category").limit(50);
+        addedToUpcomingMocks: true,
+        startDate: {
+          $ne: null,
+          $gte: new Date(now.getTime() - 2 * dayMs),
+          $lte: new Date(now.getTime() + 2 * dayMs),
+        },
+      }).populate("series", "title category");
 
       const activePublishedTests = scheduledPublishedTests
         .filter((t) => {
           const { effectiveStart, effectiveEnd } = getEffectiveWindow(t);
           if (!effectiveStart || effectiveStart > now) return false;
-          if (!effectiveEnd || effectiveEnd < now) return false;
+          // No endDate/endTime set at all means open-ended — same semantics
+          // as the actual attempt-start check in attempt.controller.ts,
+          // which also treats a null effectiveEnd as "no end restriction"
+          // rather than "never live".
+          if (effectiveEnd && effectiveEnd < now) return false;
           return true;
         })
         .slice(0, 10);

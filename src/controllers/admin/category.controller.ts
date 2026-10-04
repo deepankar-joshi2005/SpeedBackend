@@ -65,6 +65,7 @@ export const getCategoryDetail = async (req: AuthRequest, res: Response): Promis
           totalTests: testCount,
           totalQuestions: s.totalQuestions,
           status: s.status,
+          accessType: s.accessType,
         };
       })
     );
