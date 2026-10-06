@@ -6,7 +6,8 @@ export const sendEmailOtp = async (email: string, otp: string): Promise<boolean>
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   const fromName = process.env.SMTP_FROM_NAME || "The Speed Education";
-  const from = process.env.SMTP_FROM || `"${fromName}" <${user || "no-reply@speededucation.in"}>`;
+  const fromEmail = process.env.SMTP_FROM || user || "no-reply@speededucation.in";
+  const from = `"${fromName}" <${fromEmail}>`;
 
   console.log(`[OTP SERVICE] Preparing Email OTP for ${email}: ${otp}`);
 
