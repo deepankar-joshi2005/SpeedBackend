@@ -12,6 +12,7 @@ export interface ITestSeries extends Document {
   description: string;
   shortDescription: string;
   bannerImage: string | null;
+  iconImage: string | null;
   totalPapers: number;
   unitLabel: string;
   totalQuestions: number;
@@ -44,6 +45,7 @@ const testSeriesSchema = new Schema<ITestSeries>({
   description: { type: String, default: "" },
   shortDescription: { type: String, default: "" },
   bannerImage: { type: String, default: null },
+  iconImage: { type: String, default: null },
   totalPapers: { type: Number, default: 0 },
   unitLabel: { type: String, default: "Full Mock Tests" },
   totalQuestions: { type: Number, default: 0 },

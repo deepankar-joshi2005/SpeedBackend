@@ -45,6 +45,7 @@ export const getSectionalCategories = async (req: AuthRequest, res: Response): P
         title: series.title,
         category: series.category,
         bannerImage: series.bannerImage,
+        iconImage: series.iconImage,
         totalTests: testCountBySeries.get(seriesKey) ?? series.totalPapers,
         totalQuestions: questionCountBySeries.get(seriesKey) ?? 0,
         isPaid: series.accessType === "paid" || !!series.isPaid,
@@ -118,7 +119,7 @@ export const getSectionalSeriesTests = async (req: AuthRequest, res: Response): 
 
     res.status(200).json({
       category: series.category,
-      categoryIcon: categoryDoc?.iconImage || series.bannerImage || null,
+      categoryIcon: series.iconImage || categoryDoc?.iconImage || series.bannerImage || null,
       seriesId: String(series._id),
       seriesTitle: series.title,
       bannerImage: series.bannerImage,

@@ -14,6 +14,7 @@ const ALLOWED_FIELDS = [
   "description",
   "shortDescription",
   "bannerImage",
+  "iconImage",
   "difficulty",
   "totalPapers",
   "validityMonths",
@@ -102,7 +103,7 @@ export const getSeriesDetail = async (req: AuthRequest, res: Response): Promise<
 
 export const createSeries = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, category, kind, examTarget, description, shortDescription, bannerImage, difficulty } =
+    const { title, category, kind, examTarget, description, shortDescription, bannerImage, iconImage, difficulty } =
       req.body as Record<string, string | undefined>;
 
     if (!title || !title.trim()) {
@@ -122,6 +123,7 @@ export const createSeries = async (req: AuthRequest, res: Response): Promise<voi
       description: description ?? "",
       shortDescription: shortDescription ?? "",
       bannerImage: bannerImage ?? null,
+      iconImage: iconImage ?? null,
       difficulty: difficulty ?? "Mixed",
       status: "draft",
     });
