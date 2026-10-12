@@ -8,6 +8,7 @@ const normalizeBanner = (b: any) => ({
   title: b.title || "",
   subtitle: b.subtitle || "",
   linkUrl: b.linkUrl || "",
+  category: b.category || "",
   displayOrder: b.displayOrder,
   isActive: b.isActive,
 });
@@ -23,9 +24,13 @@ export const getAdminBanners = async (_req: AuthRequest, res: Response): Promise
 
 export const createAdminBanner = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { imageUrl, title, subtitle, linkUrl, displayOrder, isActive } = req.body;
+    const { imageUrl, title, subtitle, linkUrl, category, displayOrder, isActive } = req.body;
     if (!imageUrl) {
       res.status(400).json({ message: "Image URL is required" });
+      return;
+    }
+    if (!category || !String(category).trim()) {
+      res.status(400).json({ message: "Please select a category for this banner" });
       return;
     }
     const banner = await Banner.create({
@@ -33,6 +38,7 @@ export const createAdminBanner = async (req: AuthRequest, res: Response): Promis
       title: title || "",
       subtitle: subtitle || "",
       linkUrl: linkUrl || "",
+      category: String(category).trim(),
       displayOrder: displayOrder ? Number(displayOrder) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
@@ -45,10 +51,14 @@ export const createAdminBanner = async (req: AuthRequest, res: Response): Promis
 export const updateAdminBanner = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { imageUrl, title, subtitle, linkUrl, displayOrder, isActive } = req.body;
+    const { imageUrl, title, subtitle, linkUrl, category, displayOrder, isActive } = req.body;
+    if (category !== undefined && !String(category).trim()) {
+      res.status(400).json({ message: "Please select a category for this banner" });
+      return;
+    }
     const banner = await Banner.findByIdAndUpdate(
       id,
-      { imageUrl, title, subtitle, linkUrl, displayOrder, isActive },
+      { imageUrl, title, subtitle, linkUrl, category, displayOrder, isActive },
       { new: true }
     );
     if (!banner) {

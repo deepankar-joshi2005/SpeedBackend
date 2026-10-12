@@ -108,6 +108,7 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
           title: b.title,
           subtitle: b.subtitle,
           linkUrl: b.linkUrl,
+          category: b.category,
         }))
       : [
           {

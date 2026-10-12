@@ -5,6 +5,11 @@ export interface IBanner extends Document {
   title?: string;
   subtitle?: string;
   linkUrl?: string;
+  // Name of an existing Category (see category.model.ts) this banner
+  // represents. Required — tapping the banner on the student Home screen
+  // takes the student straight to that category's Test Series list, so a
+  // banner with no category would have nowhere meaningful to go.
+  category: string;
   displayOrder: number;
   isActive: boolean;
   createdAt: Date;
@@ -17,6 +22,7 @@ const bannerSchema = new Schema<IBanner>(
     title: { type: String, default: "" },
     subtitle: { type: String, default: "" },
     linkUrl: { type: String, default: "" },
+    category: { type: String, required: true, trim: true },
     displayOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
