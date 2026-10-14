@@ -37,20 +37,35 @@ app.use(express.json());
 // two subfolders require a short-lived signature minted only for entitled
 // students (see utils/signedUrl.ts + student pyq/ebook controllers).
 const PROTECTED_UPLOAD_PREFIXES = ["/pyq/", "/ebooks/"];
+
+// When nginx sits in front and has a matching `internal location
+// /protected-uploads/` block (see deploy/nginx-uploads.conf.example), Node
+// only checks the signature and hands the actual byte-serving to nginx via
+// X-Accel-Redirect, which streams the file with sendfile() instead of
+// Node reading+piping it. Off by default — only flip this on after the
+// nginx block is deployed and reloaded, otherwise PDF/image requests will
+// get an empty response.
+const USE_NGINX_X_ACCEL = process.env.NGINX_X_ACCEL_REDIRECT === "true";
+
 app.use(
   "/uploads",
   (req: Request, res: Response, next: NextFunction) => {
     const isProtected = PROTECTED_UPLOAD_PREFIXES.some((prefix) => req.path.startsWith(prefix));
-    if (!isProtected) {
-      next();
+    if (isProtected) {
+      const { exp, sig } = req.query as { exp?: string; sig?: string };
+      const canonicalPath = `/uploads${req.path}`;
+      if (!verifySignedPath(canonicalPath, exp, sig)) {
+        res.status(403).json({ message: "This link has expired. Please reopen it from the app." });
+        return;
+      }
+    }
+
+    if (USE_NGINX_X_ACCEL) {
+      res.setHeader("X-Accel-Redirect", `/protected-uploads${req.path}`);
+      res.end();
       return;
     }
-    const { exp, sig } = req.query as { exp?: string; sig?: string };
-    const canonicalPath = `/uploads${req.path}`;
-    if (!verifySignedPath(canonicalPath, exp, sig)) {
-      res.status(403).json({ message: "This link has expired. Please reopen it from the app." });
-      return;
-    }
+
     next();
   },
   express.static(path.join(__dirname, "../uploads"))

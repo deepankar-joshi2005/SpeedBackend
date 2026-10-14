@@ -149,7 +149,18 @@ export const updateCategory = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    if (name !== undefined) category.name = name.trim();
+    const oldName = category.name;
+    const newName = name !== undefined ? name.trim() : undefined;
+
+    if (newName !== undefined && newName !== oldName) {
+      const duplicate = await Category.findOne({ name: newName, _id: { $ne: category._id } });
+      if (duplicate) {
+        res.status(409).json({ message: "A category with this name already exists" });
+        return;
+      }
+    }
+
+    if (newName !== undefined) category.name = newName;
     if (description !== undefined) category.description = description.trim();
     if (iconKey !== undefined) category.iconKey = iconKey;
     if (iconImage !== undefined) category.iconImage = iconImage;
@@ -158,6 +169,18 @@ export const updateCategory = async (req: AuthRequest, res: Response): Promise<v
     if (isActive !== undefined) category.isActive = isActive;
 
     await category.save();
+
+    // TestSeries/Pyq/Ebook/TestAttempt store the category by name (not by id),
+    // so a rename must be cascaded or they'd be orphaned under the old name.
+    if (newName !== undefined && newName !== oldName) {
+      await Promise.all([
+        TestSeries.updateMany({ category: oldName }, { category: newName }),
+        Pyq.updateMany({ category: oldName }, { category: newName }),
+        Ebook.updateMany({ category: oldName }, { category: newName }),
+        TestAttempt.updateMany({ category: oldName }, { category: newName }),
+      ]);
+    }
+
     res.status(200).json(category);
   } catch (error) {
     res.status(500).json({ message: "Failed to update category", error });
