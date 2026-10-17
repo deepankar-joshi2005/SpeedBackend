@@ -7,6 +7,7 @@ import {
   changePassword,
   sendOtp,
   verifyOtp,
+  verifyFirebaseOtp,
 } from "../controllers/auth.controller";
 import { requireAuth } from "../middleware/auth.middleware";
 
@@ -14,6 +15,7 @@ const router = Router();
 
 router.post("/send-otp", sendOtp);
 router.post("/verify-otp", verifyOtp);
+router.post("/verify-firebase-otp", verifyFirebaseOtp);
 router.post("/register", register);
 router.post("/login", login);
 router.post("/logout", requireAuth, logout);

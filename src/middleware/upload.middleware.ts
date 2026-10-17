@@ -34,9 +34,11 @@ export const uploadImport = multer({
       "application/vnd.ms-excel",
       "text/csv",
       "application/csv",
+      "text/html",
+      "application/xhtml+xml",
     ];
-    if (!allowed.includes(file.mimetype) && !/\.(xlsx|xls|csv)$/i.test(file.originalname)) {
-      cb(new Error("Only .xlsx, .xls, or .csv files are allowed"));
+    if (!allowed.includes(file.mimetype) && !/\.(xlsx|xls|csv|html?)$/i.test(file.originalname)) {
+      cb(new Error("Only .xlsx, .xls, .csv, or .html files are allowed"));
       return;
     }
     cb(null, true);

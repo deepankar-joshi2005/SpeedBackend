@@ -33,6 +33,7 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
       email: user.email,
       mobile: user.mobile,
       preferredLanguage: user.preferredLanguage,
+      targetExam: user.targetExam || "SSC CGL / Railway",
       profileImage: user.profileImage ?? null,
       testsAttempted,
       avgAccuracy,
@@ -46,10 +47,11 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
 export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.userId as string;
-    const { name, email, mobile } = req.body as {
+    const { name, email, mobile, targetExam } = req.body as {
       name?: string;
       email?: string;
       mobile?: string;
+      targetExam?: string;
     };
 
     if (!name || !name.trim()) {
@@ -74,9 +76,18 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    const updateFields: Record<string, unknown> = {
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      mobile: mobile.trim(),
+    };
+    if (targetExam !== undefined) {
+      updateFields.targetExam = targetExam.trim();
+    }
+
     const user = await User.findByIdAndUpdate(
       userId,
-      { name: name.trim(), email: email.toLowerCase().trim(), mobile: mobile.trim() },
+      updateFields,
       { new: true }
     );
     if (!user) {

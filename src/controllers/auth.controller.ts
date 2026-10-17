@@ -8,6 +8,7 @@ import { sendEmailOtp, sendSmsOtp } from "../services/otpSender.service";
 import { isValidEmail, isValidMobile, isStrongPassword } from "../utils/validators";
 import { notifyAllAdmins } from "./notification.controller";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { firebaseAuth } from "../config/firebase";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 const TOKEN_EXPIRY = "5d";
@@ -154,6 +155,60 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to verify OTP. Please try again.", error });
+  }
+};
+
+// Verifies a Firebase Phone-Auth ID token (minted client-side after the user enters the SMS OTP)
+// and issues the same short-lived verificationToken shape as verifyOtp, so `register` needs no changes.
+export const verifyFirebaseOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { idToken } = req.body as { idToken?: string };
+    if (!idToken || !idToken.trim()) {
+      res.status(400).json({ message: "Firebase verification token is required" });
+      return;
+    }
+
+    let decoded;
+    try {
+      decoded = await firebaseAuth.verifyIdToken(idToken);
+    } catch {
+      res.status(401).json({ message: "Invalid or expired verification. Please try again." });
+      return;
+    }
+
+    const rawPhone = decoded.phone_number as string | undefined;
+    if (!rawPhone) {
+      res.status(400).json({ message: "No verified phone number found on this token" });
+      return;
+    }
+
+    // Firebase returns E.164 (e.g. +919876543210); the app stores bare 10-digit Indian numbers.
+    const mobile = rawPhone.replace(/^\+91/, "").trim();
+    if (!isValidMobile(mobile)) {
+      res.status(400).json({ message: "Unsupported phone number format" });
+      return;
+    }
+
+    const existingUser = await User.findOne({ mobile });
+    if (existingUser) {
+      res.status(409).json({ message: "This mobile number is already registered. Please login instead." });
+      return;
+    }
+
+    const verificationToken = jwt.sign(
+      { target: mobile, type: "mobile", isVerified: true },
+      JWT_SECRET,
+      { expiresIn: "30m" }
+    );
+
+    res.status(200).json({
+      message: "Mobile number verified successfully!",
+      verificationToken,
+      target: mobile,
+      type: "mobile",
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to verify mobile number. Please try again.", error });
   }
 };
 

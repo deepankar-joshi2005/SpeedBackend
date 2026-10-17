@@ -364,7 +364,15 @@ export const importQuestions = async (req: AuthRequest, res: Response): Promise<
     const { testId } = req.params;
     const commit = req.query.commit === "true";
 
-    const rows = await parseSpreadsheet(file.buffer, file.originalname, file.mimetype);
+    let rows: Awaited<ReturnType<typeof parseSpreadsheet>>;
+    try {
+      rows = await parseSpreadsheet(file.buffer, file.originalname, file.mimetype);
+    } catch (parseError) {
+      res.status(400).json({
+        message: parseError instanceof Error ? parseError.message : "Could not read this file.",
+      });
+      return;
+    }
     if (rows.length === 0) {
       res.status(400).json({ message: "The uploaded file has no data rows" });
       return;

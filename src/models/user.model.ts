@@ -16,6 +16,7 @@ export interface IUser extends Document {
   preferredLanguage: Language;
   role: Role;
   isCoachingStudent: boolean;
+  targetExam?: string;
   profileImage: string | null;
   purchasedSeries: mongoose.Types.ObjectId[];
   purchasedPyqIds: mongoose.Types.ObjectId[];
@@ -38,6 +39,7 @@ const userSchema = new Schema<IUser>({
   preferredLanguage: { type: String, enum: LANGUAGES, default: "English" },
   role: { type: String, enum: ROLES, default: "student" },
   isCoachingStudent: { type: Boolean, default: false },
+  targetExam: { type: String, default: "SSC CGL / Railway", trim: true },
   profileImage: { type: String, default: null },
   purchasedSeries: [{ type: Schema.Types.ObjectId, ref: "TestSeries" }],
   purchasedPyqIds: [{ type: Schema.Types.ObjectId, ref: "Pyq" }],
