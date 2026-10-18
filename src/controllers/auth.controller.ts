@@ -171,7 +171,8 @@ export const verifyFirebaseOtp = async (req: Request, res: Response): Promise<vo
     let decoded;
     try {
       decoded = await firebaseAuth.verifyIdToken(idToken);
-    } catch {
+    } catch (err) {
+      console.error("[verifyFirebaseOtp] firebaseAuth.verifyIdToken failed:", err);
       res.status(401).json({ message: "Invalid or expired verification. Please try again." });
       return;
     }
