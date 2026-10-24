@@ -145,7 +145,7 @@ async function gradeAndCompleteAttempt(
         sectionTally[sectionIndex].attempted += 1;
       }
       if (test.negativeMarkingEnabled) {
-        const negMarks = question.negativeMarks ?? test.negativeMarks;
+        const negMarks = test.negativeMarks ?? question.negativeMarks;
         score -= negMarks;
         if (sectionIndex !== -1) sectionTally[sectionIndex].score -= negMarks;
       }
