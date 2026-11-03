@@ -3,7 +3,10 @@ import fs from "fs";
 import path from "path";
 
 const GS_CANDIDATES = process.platform === "win32" ? ["gswin64c", "gswin32c", "gs"] : ["gs"];
-const EXEC_TIMEOUT_MS = 2 * 60 * 1000; // large scanned PDFs can take a while to recompress
+// Runs in the background after the upload response is already sent (see
+// upload.controller.ts), so it's fine to give slow/low-CPU servers a long
+// leash — large scanned PDFs can genuinely take several minutes to recompress.
+const EXEC_TIMEOUT_MS = 10 * 60 * 1000;
 
 function run(bin: string, args: string[], timeoutMs = EXEC_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {

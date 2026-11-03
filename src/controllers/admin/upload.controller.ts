@@ -18,11 +18,15 @@ export const uploadPyqFile = async (req: AuthRequest, res: Response): Promise<vo
     res.status(400).json({ message: "No PDF file was uploaded" });
     return;
   }
-  const { finalSize } = await optimizePdfInPlace(file.path, PYQ_ORIGINALS_DIR);
   res.status(201).json({
     url: `/uploads/pyq/${file.filename}`,
     fileName: file.originalname,
-    fileSize: finalSize,
+    fileSize: file.size,
+  });
+  // Compression can take minutes on large scanned PDFs — never let it block
+  // the upload response. The file is already usable as-is at file.path.
+  optimizePdfInPlace(file.path, PYQ_ORIGINALS_DIR).catch((error) => {
+    console.warn("[upload] Background PDF optimization failed:", error);
   });
 };
 
@@ -32,10 +36,12 @@ export const uploadEbookFile = async (req: AuthRequest, res: Response): Promise<
     res.status(400).json({ message: "No PDF file was uploaded" });
     return;
   }
-  const { finalSize } = await optimizePdfInPlace(file.path, EBOOK_ORIGINALS_DIR);
   res.status(201).json({
     url: `/uploads/ebooks/${file.filename}`,
     fileName: file.originalname,
-    fileSize: finalSize,
+    fileSize: file.size,
+  });
+  optimizePdfInPlace(file.path, EBOOK_ORIGINALS_DIR).catch((error) => {
+    console.warn("[upload] Background PDF optimization failed:", error);
   });
 };
