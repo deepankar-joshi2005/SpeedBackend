@@ -8,7 +8,7 @@ const GS_CANDIDATES = process.platform === "win32" ? ["gswin64c", "gswin32c", "g
 // leash — large scanned PDFs can genuinely take several minutes to recompress.
 const EXEC_TIMEOUT_MS = 10 * 60 * 1000;
 
-function run(bin: string, args: string[], timeoutMs = EXEC_TIMEOUT_MS): Promise<void> {
+export function run(bin: string, args: string[], timeoutMs = EXEC_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(bin, args, { timeout: timeoutMs }, (error) => {
       if (error) reject(error);
@@ -32,7 +32,7 @@ async function findBinary(candidates: string[]): Promise<string | null> {
 let gsBinaryPromise: Promise<string | null> | null = null;
 let qpdfBinaryPromise: Promise<string | null> | null = null;
 
-const resolveGs = () => (gsBinaryPromise ??= findBinary(GS_CANDIDATES));
+export const resolveGs = () => (gsBinaryPromise ??= findBinary(GS_CANDIDATES));
 const resolveQpdf = () => (qpdfBinaryPromise ??= findBinary(["qpdf"]));
 
 export interface OptimizeResult {

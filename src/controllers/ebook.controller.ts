@@ -1,8 +1,12 @@
+import fs from "fs";
+import path from "path";
 import { Response } from "express";
 import Ebook from "../models/ebook.model";
 import User from "../models/user.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { signPath } from "../utils/signedUrl";
+import { generatePdfPreview } from "../utils/pdfPreview";
+import { EBOOK_DIR, EBOOK_DEMO_DIR } from "../middleware/upload.middleware";
 
 import Category from "../models/category.model";
 
@@ -47,6 +51,44 @@ export const listEbooksForStudent = async (req: AuthRequest, res: Response): Pro
     );
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch e-books", error });
+  }
+};
+
+// Serves (generating + caching on first request) a 10-page preview of a paid
+// ebook's PDF, so a student can see what they'd be buying before unlocking it.
+export const getEbookDemo = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const ebook = await Ebook.findById(req.params.id);
+    if (!ebook) {
+      res.status(404).json({ message: "E-book not found" });
+      return;
+    }
+    if (ebook.accessType !== "paid") {
+      res.status(400).json({ message: "Demo preview is only available for paid e-books" });
+      return;
+    }
+
+    const sourceFilename = path.basename(ebook.fileUrl);
+    const sourcePath = path.join(EBOOK_DIR, sourceFilename);
+    if (!fs.existsSync(sourcePath)) {
+      res.status(404).json({ message: "E-book file not found" });
+      return;
+    }
+
+    const demoFilename = `${path.basename(sourceFilename, path.extname(sourceFilename))}-demo.pdf`;
+    const demoPath = path.join(EBOOK_DEMO_DIR, demoFilename);
+
+    if (!fs.existsSync(demoPath)) {
+      const generated = await generatePdfPreview(sourcePath, demoPath);
+      if (!generated) {
+        res.status(503).json({ message: "Demo preview is temporarily unavailable. Please try again later." });
+        return;
+      }
+    }
+
+    res.status(200).json({ fileUrl: `/uploads/ebooks-demo/${demoFilename}` });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to generate demo preview", error });
   }
 };
 

@@ -22,7 +22,7 @@ export interface IEbook extends Document {
 const ebookSchema = new Schema<IEbook>(
   {
     title: { type: String, required: true, trim: true },
-    category: { type: String, required: true, trim: true, index: true },
+    category: { type: String, default: "", trim: true, index: true },
     author: { type: String, default: "", trim: true },
     description: { type: String, default: "" },
     coverImage: { type: String, default: null },

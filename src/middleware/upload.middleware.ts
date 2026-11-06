@@ -50,9 +50,16 @@ if (!fs.existsSync(PYQ_DIR)) {
   fs.mkdirSync(PYQ_DIR, { recursive: true });
 }
 
-const EBOOK_DIR = path.join(UPLOADS_DIR, "ebooks");
+export const EBOOK_DIR = path.join(UPLOADS_DIR, "ebooks");
 if (!fs.existsSync(EBOOK_DIR)) {
   fs.mkdirSync(EBOOK_DIR, { recursive: true });
+}
+
+// Cached 10-page "view demo" previews for locked (paid) ebooks — public,
+// unsigned, since a short teaser isn't the paid content itself.
+export const EBOOK_DEMO_DIR = path.join(UPLOADS_DIR, "ebooks-demo");
+if (!fs.existsSync(EBOOK_DEMO_DIR)) {
+  fs.mkdirSync(EBOOK_DEMO_DIR, { recursive: true });
 }
 
 // Pre-compression backups live outside `uploads/` so they're never reachable

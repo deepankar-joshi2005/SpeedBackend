@@ -63,14 +63,14 @@ export const createEbook = async (req: AuthRequest, res: Response): Promise<void
       isActive?: boolean;
     };
 
-    if (!title?.trim() || !category?.trim() || !fileUrl) {
-      res.status(400).json({ message: "Title, category and PDF file are required" });
+    if (!title?.trim() || !fileUrl) {
+      res.status(400).json({ message: "Title and PDF file are required" });
       return;
     }
 
     const ebook = await Ebook.create({
       title: title.trim(),
-      category: category.trim(),
+      category: category?.trim() ?? "",
       author: author?.trim() ?? "",
       description: description?.trim() ?? "",
       coverImage: coverImage ?? null,
@@ -85,7 +85,7 @@ export const createEbook = async (req: AuthRequest, res: Response): Promise<void
 
     await notifyAllStudents(
       "New E-Book Added",
-      `${ebook.title} is now available in ${ebook.category}.`,
+      `${ebook.title} is now available.`,
       "system",
       { category: ebook.category, targetScreen: "ebooks" }
     );
